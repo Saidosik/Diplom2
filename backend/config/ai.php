@@ -15,17 +15,17 @@ return [
     'provider' => env('AI_PROVIDER', 'openrouter'),
 
     'models' => [
-        'chat' => env('AI_CHAT_MODEL', 'gpt-4o-mini'),
-        'embedding' => env('AI_EMBEDDING_MODEL', 'text-embedding-3-small'),
+        'chat' => env('AI_CHAT_MODEL', 'deepseek/deepseek-v4-flash:free'),
+        'embedding' => env('AI_EMBEDDING_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free'),
         'rerank' => env('AI_RERANK_MODEL'),
     ],
 
     'chat_models' => [
         [
             'id' => env('AI_CHAT_MODEL', 'deepseek/deepseek-v4-flash:free'),
-            'label' => env('AI_CHAT_MODEL_LABEL', 'DeepSeek V4 Flash'),
-            'provider' => 'openrouter',
-            'description' => 'Быстрая модель для обычного чата, технических вопросов и коротких объяснений.',
+            'label' => env('AI_CHAT_MODEL_LABEL', 'DeepSeek V4 Flash Free'),
+            'provider' => env('AI_PROVIDER', 'openrouter'),
+            'description' => 'Бесплатная модель DeepSeek для обычного чата, рассуждений, кода и RAG.',
             'category' => 'general',
             'default' => true,
             'supports_files' => true,
@@ -33,10 +33,21 @@ return [
             'supports_rag' => true,
         ],
         [
-            'id' => env('AI_CODE_MODEL', 'poolsideai/laguna-xs-2:free'),
-            'label' => env('AI_CODE_MODEL_LABEL', 'Poolside Laguna XS.2'),
-            'provider' => 'openrouter',
-            'description' => 'Модель для программирования, анализа ошибок, рефакторинга и объяснения кода.',
+            'id' => env('AI_ALT_MODEL', 'google/gemma-4-31b-it:free'),
+            'label' => env('AI_ALT_MODEL_LABEL', 'Google Gemma 4 31B Free'),
+            'provider' => env('AI_PROVIDER', 'openrouter'),
+            'description' => 'Бесплатная универсальная модель для чата, объяснений, документов и мультиязычных задач.',
+            'category' => 'general',
+            'default' => false,
+            'supports_files' => true,
+            'supports_code' => true,
+            'supports_rag' => true,
+        ],
+        [
+            'id' => env('AI_CODE_MODEL', 'poolside/laguna-m.1:free'),
+            'label' => env('AI_CODE_MODEL_LABEL', 'Poolside Laguna M.1 Free'),
+            'provider' => env('AI_PROVIDER', 'openrouter'),
+            'description' => 'Бесплатная модель для программирования: генерация, дебаг, ревью и рефакторинг кода.',
             'category' => 'code',
             'default' => false,
             'supports_files' => true,
@@ -45,21 +56,10 @@ return [
         ],
         [
             'id' => env('AI_LONG_CONTEXT_MODEL', 'moonshotai/kimi-k2.6:free'),
-            'label' => env('AI_LONG_CONTEXT_MODEL_LABEL', 'Kimi K2.6'),
-            'provider' => 'openrouter',
-            'description' => 'Модель для длинного контекста, анализа больших файлов и сложных архитектурных задач.',
+            'label' => env('AI_LONG_CONTEXT_MODEL_LABEL', 'MoonshotAI Kimi K2.6 Free'),
+            'provider' => env('AI_PROVIDER', 'openrouter'),
+            'description' => 'Бесплатная модель для длинного контекста, больших файлов, UI/UX и сложных проектных задач.',
             'category' => 'long-context',
-            'default' => false,
-            'supports_files' => true,
-            'supports_code' => true,
-            'supports_rag' => true,
-        ],
-        [
-            'id' => env('AI_ALT_MODEL', 'google/gemma-4-26b-a4b-it:free'),
-            'label' => env('AI_ALT_MODEL_LABEL', 'Gemma 4 26B A4B'),
-            'provider' => 'openrouter',
-            'description' => 'Универсальная альтернативная модель для общения, объяснений и анализа текста.',
-            'category' => 'general',
             'default' => false,
             'supports_files' => true,
             'supports_code' => true,
@@ -70,17 +70,17 @@ return [
     'embedding_models' => [
         [
             'id' => env('AI_EMBEDDING_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free'),
-            'label' => env('AI_EMBEDDING_MODEL_LABEL', 'NVIDIA Llama Nemotron Embed VL 1B V2'),
+            'label' => env('AI_EMBEDDING_MODEL_LABEL', 'NVIDIA Llama Nemotron Embed VL 1B V2 Free'),
             'provider' => env('AI_EMBEDDING_PROVIDER', 'openrouter'),
-            'dimensions' => (int) env('AI_EMBEDDING_DIMENSIONS', 1536),
+            'dimensions' => (int) env('AI_EMBEDDING_DIMENSIONS', 2048),
             'default' => true,
         ],
     ],
 
     'embeddings' => [
-        'provider' => env('AI_EMBEDDING_PROVIDER', env('AI_PROVIDER', 'openai')),
-        'model' => env('AI_EMBEDDING_MODEL', 'text-embedding-3-small'),
-        'dimensions' => (int) env('AI_EMBEDDING_DIMENSIONS', 1536),
+        'provider' => env('AI_EMBEDDING_PROVIDER', env('AI_PROVIDER', 'openrouter')),
+        'model' => env('AI_EMBEDDING_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free'),
+        'dimensions' => (int) env('AI_EMBEDDING_DIMENSIONS', 2048),
         'cache' => filter_var(env('AI_EMBEDDINGS_CACHE', true), FILTER_VALIDATE_BOOL),
         'fallback_to_local' => filter_var(env('AI_EMBEDDINGS_LOCAL_FALLBACK', true), FILTER_VALIDATE_BOOL),
     ],
@@ -97,14 +97,14 @@ return [
     'rag' => [
         'max_sources' => (int) env('AI_RAG_MAX_SOURCES', 8),
         'min_similarity' => (float) env('AI_RAG_MIN_SIMILARITY', 0.35),
-        'use_rerank' => filter_var(env('AI_RAG_RERANK', true), FILTER_VALIDATE_BOOL),
+        'use_rerank' => filter_var(env('AI_RAG_RERANK', false), FILTER_VALIDATE_BOOL),
         'fallback_to_local_answer' => filter_var(env('AI_RAG_LOCAL_FALLBACK', true), FILTER_VALIDATE_BOOL),
     ],
 
     'reranking' => [
         'provider' => env('AI_RERANK_PROVIDER'),
         'model' => env('AI_RERANK_MODEL'),
-        'enabled' => filter_var(env('AI_RERANK_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'enabled' => filter_var(env('AI_RERANK_ENABLED', false), FILTER_VALIDATE_BOOL),
     ],
 
     'vector' => [
