@@ -1,0 +1,127 @@
+export type PublicationType = "article" | "news" | "post" | "guide"
+export type PublicationStatus = "draft" | "published" | "hidden" | "archived"
+
+export type PublicationBlockType =
+    | "heading"
+    | "paragraph"
+    | "markdown"
+    | "image"
+    | "video"
+    | "code"
+    | "terminal"
+    | "diff"
+    | "file_tree"
+    | "callout"
+    | "code_snippet"
+    | "important"
+    | "quote"
+    | "warning"
+    | "link"
+    | "divider"
+
+
+export type PublicationTag = {
+    id: number
+    name: string
+    slug: string
+    description?: string | null
+    color?: string | null
+    status?: string | null
+}
+
+export type PublicationAuthor = {
+    id: number
+    name: string
+    role?: string | null
+    reputation_score?: number
+    reputation_level?: { label: string; next_label?: string | null; progress: number } | null
+    avatar?: string | null
+    avatar_url?: string | null
+}
+
+export type PublicationAttachment = {
+    id: number
+    user_file_id: number
+    title?: string | null
+    original_name: string
+    mime_type?: string | null
+    size: number
+    kind?: string | null
+    visibility?: string | null
+    download_url?: string | null
+}
+
+export type PublicationBlockContent = Record<string, unknown>
+
+export type PublicationBlock = {
+    id?: number
+    client_id?: string
+    type: PublicationBlockType
+    type_label?: string
+    sort_order: number
+    content: PublicationBlockContent
+    properties?: PublicationBlockContent
+    created_at?: string | null
+    updated_at?: string | null
+}
+
+export type Publication = {
+    id: number
+    type: PublicationType
+    type_label?: string
+    status: PublicationStatus
+    status_label?: string
+    title: string
+    slug: string
+    excerpt?: string | null
+    cover_image_path?: string | null
+    cover_image_url?: string | null
+    reading_time_minutes?: number | null
+    likes_count?: number
+    dislikes_count?: number
+    comments_count?: number
+    saved_count?: number
+    my_reaction?: "like" | "dislike" | null
+    is_saved?: boolean
+    published_at?: string | null
+    created_at?: string | null
+    updated_at?: string | null
+    is_owner?: boolean
+    author?: PublicationAuthor | null
+    tags?: PublicationTag[]
+    blocks?: PublicationBlock[]
+    attachments?: PublicationAttachment[]
+}
+
+export type PublicationPayload = {
+    type: PublicationType
+    status: PublicationStatus
+    title: string
+    slug?: string | null
+    excerpt?: string | null
+    cover_image_path?: string | null
+    reading_time_minutes?: number | null
+    tags?: string[]
+    attachment_ids?: number[]
+    blocks: Array<{
+        type: PublicationBlockType
+        sort_order: number
+        content: PublicationBlockContent
+    }>
+}
+
+export type PublicationPaginationMeta = {
+    current_page?: number
+    last_page?: number
+    per_page?: number
+    total?: number
+}
+
+export type PublicationCollectionResponse = {
+    data: Publication[]
+    meta?: PublicationPaginationMeta
+}
+
+export type PublicationSingleResponse = {
+    data: Publication
+}

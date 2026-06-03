@@ -1,0 +1,36 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#050807"/>
+  <g opacity="0.9">
+    <circle cx="1260" cy="160" r="280" fill="#047857" fill-opacity="0.22"/>
+    <circle cx="260" cy="720" r="360" fill="#059669" fill-opacity="0.16"/>
+    <circle cx="860" cy="420" r="460" fill="#0f172a" fill-opacity="0.7"/>
+  </g>
+  <g opacity="0.16" stroke="#10b981" stroke-width="2">
+    <path d="M110 170H1490"/>
+    <path d="M110 300H1490"/>
+    <path d="M110 430H1490"/>
+    <path d="M110 560H1490"/>
+    <path d="M110 690H1490"/>
+    <path d="M230 80V820"/>
+    <path d="M430 80V820"/>
+    <path d="M630 80V820"/>
+    <path d="M830 80V820"/>
+    <path d="M1030 80V820"/>
+    <path d="M1230 80V820"/>
+    <path d="M1430 80V820"/>
+  </g>
+  <rect x="160" y="140" width="1280" height="620" rx="42" fill="#0b0f0e" fill-opacity="0.86" stroke="#1f2937"/>
+  <rect x="220" y="210" width="1160" height="430" rx="28" fill="#030706" stroke="#123d2c"/>
+  <text x="270" y="315" fill="#10b981" font-size="42" font-family="JetBrains Mono, Consolas, monospace">const platform = "Вектор";</text>
+  <text x="270" y="395" fill="#e5e7eb" font-size="38" font-family="JetBrains Mono, Consolas, monospace">learn(programming.history)</text>
+  <text x="270" y="475" fill="#94a3b8" font-size="34" font-family="JetBrains Mono, Consolas, monospace">.publish(materials)</text>
+  <text x="270" y="555" fill="#94a3b8" font-size="34" font-family="JetBrains Mono, Consolas, monospace">.discuss(questions, answers);</text>
+  <g transform="translate(1120 300)">
+    <rect width="160" height="160" rx="30" fill="#047857"/>
+    <path d="M80 37L119 58V101L80 123L41 101V58L80 37Z" stroke="white" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M80 77V123" stroke="white" stroke-width="10" stroke-linecap="round"/>
+    <path d="M43 58L80 79L117 58" stroke="white" stroke-width="10" stroke-linejoin="round"/>
+  </g>
+  <text x="220" y="705" fill="#f8fafc" font-size="54" font-family="Inter, Arial, sans-serif" font-weight="700">Вектор</text>
+  <text x="430" y="705" fill="#94a3b8" font-size="28" font-family="Inter, Arial, sans-serif">образовательная платформа для разработчиков</text>
+</svg>
