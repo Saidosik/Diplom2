@@ -34,8 +34,6 @@ const segmentLabels: Record<string, string> = {
     chats: "Чаты",
     friends: "Друзья",
     files: "Файлы",
-    friends: "Друзья",
-    files: "Файлы",
 }
 
 function getSegmentLabel(segment: string, previousSegment?: string) {

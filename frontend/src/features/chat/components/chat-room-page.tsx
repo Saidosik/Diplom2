@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getConversation, getMessages, markConversationRead, sendChatMessage, sendTypingStatus } from "@/features/chat/api"
-import type { ChatMessage, ChatParticipant } from "@/features/chat/types"
+import type { ChatConversation, ChatMessage, ChatParticipant, Paginated } from "@/features/chat/types"
 import type { User } from "@/features/auth/types"
 import { getMe } from "@/features/auth/api"
 import { getEcho } from "@/lib/realtime/echo"
@@ -130,7 +130,7 @@ export function ChatRoomPage({ conversationId }: { conversationId: string }) {
 
         channel.listen(".chat.message.created", (payload: MessagePayload) => {
             if (String(payload.conversation_id) !== String(conversationId)) return
-            queryClient.setQueryData(["chats", "messages", conversationId], (current: any) => {
+            queryClient.setQueryData(["chats", "messages", conversationId], (current: Paginated<ChatMessage> | undefined) => {
                 if (!current?.data) return current
                 const exists = current.data.some((message: ChatMessage) => message.id === payload.message.id)
                 if (exists) return current
@@ -161,7 +161,7 @@ export function ChatRoomPage({ conversationId }: { conversationId: string }) {
         channel.listen(".chat.read.updated", (payload: ReadPayload) => {
             if (String(payload.conversation_id) !== String(conversationId)) return
             queryClient.invalidateQueries({ queryKey: ["chats", "messages", conversationId] })
-            queryClient.setQueryData(["chats", "conversation", conversationId], (current: any) => {
+            queryClient.setQueryData(["chats", "conversation", conversationId], (current: ChatConversation | undefined) => {
                 if (!current?.participants || !payload.participant) return current
                 return {
                     ...current,
@@ -171,7 +171,7 @@ export function ChatRoomPage({ conversationId }: { conversationId: string }) {
         })
 
         channel.listen(".presence.updated", (payload: PresencePayload) => {
-            queryClient.setQueryData(["chats", "conversation", conversationId], (current: any) => {
+            queryClient.setQueryData(["chats", "conversation", conversationId], (current: ChatConversation | undefined) => {
                 if (!current?.participants) return current
                 return {
                     ...current,

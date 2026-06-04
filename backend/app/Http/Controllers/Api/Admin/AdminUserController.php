@@ -105,9 +105,14 @@ class AdminUserController extends Controller
         return response()->json(['data' => self::serializeUser($model)]);
     }
 
-    public function restore(int $user): JsonResponse
+    public function restore(Request $request, int $user): JsonResponse
     {
         $model = User::withTrashed()->findOrFail($user);
+
+        if ($model->isAdmin() && ! $request->user()?->isAdmin()) {
+            abort(403, 'Модератор не может восстановить администратора.');
+        }
+
         $model->restore();
 
         return response()->json(['data' => self::serializeUser($model->fresh())]);

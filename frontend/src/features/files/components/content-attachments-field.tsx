@@ -17,7 +17,7 @@ export type ContentAttachment = {
     mime_type?: string | null
     size: number
     kind?: string | null
-    visibility?: "private" | "public" | string
+    visibility?: "private" | "public" | string | null
     download_url?: string | null
 }
 

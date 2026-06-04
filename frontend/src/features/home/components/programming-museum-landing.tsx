@@ -368,7 +368,7 @@ export function ProgrammingMuseumLanding() {
                             <p><span className="text-amber-300">user</span>.ask(question)</p>
                             <p><span className="text-rose-300">user</span>.save(answer)</p>
                             <p><span className="text-blue-300">progress</span>.start(course)</p>
-                            <p className="text-zinc-500">// знания превращаются в практику</p>
+                            <p className="text-zinc-500">{"// знания превращаются в практику"}</p>
                         </div>
                     </div>
                 </div>

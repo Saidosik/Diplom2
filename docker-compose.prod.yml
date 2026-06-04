@@ -1,0 +1,226 @@
+services:
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    env_file:
+      - path: ./.env.production
+        required: false
+    environment:
+      VPS_PUBLIC_IP: ${VPS_PUBLIC_IP}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    depends_on:
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    env_file:
+      - path: ./.env.production
+        required: false
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+      - certbot-logs:/var/log/letsencrypt
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["trap exit TERM; while :; do sleep 1d & wait $${!}; done"]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${SITE_URL}
+        NEXT_PUBLIC_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-app-key}
+        NEXT_PUBLIC_REVERB_HOST: ${VPS_PUBLIC_IP}
+        NEXT_PUBLIC_REVERB_PORT: 443
+        NEXT_PUBLIC_REVERB_FORCE_TLS: "true"
+    env_file:
+      - path: ./frontend/.env.production
+        required: false
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NEXT_PUBLIC_SITE_URL: ${SITE_URL}
+      LARAVEL_API_URL: http://backend:8000/api
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        COMPOSER_INSTALL_ARGS: --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${SITE_URL}
+      FRONTEND_URL: ${SITE_URL}
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      SESSION_SECURE_COOKIE: "true"
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/up >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  queue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        COMPOSER_INSTALL_ARGS: --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${SITE_URL}
+      FRONTEND_URL: ${SITE_URL}
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      SESSION_SECURE_COOKIE: "true"
+    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=120
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        COMPOSER_INSTALL_ARGS: --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${SITE_URL}
+      FRONTEND_URL: ${SITE_URL}
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      SESSION_SECURE_COOKIE: "true"
+    command: sh -c 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        COMPOSER_INSTALL_ARGS: --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${SITE_URL}
+      FRONTEND_URL: ${SITE_URL}
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: 8080
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
+    expose:
+      - "8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vector}
+      POSTGRES_USER: ${POSTGRES_USER:-vector}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_STRONG_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-vector} -d $${POSTGRES_DB:-vector}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  certbot-etc:
+  certbot-webroot:
+  certbot-logs:
+  postgres-data:
+  redis-data:
+  backend-storage:
