@@ -18,7 +18,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-#[Fillable(['name', 'email', 'password', 'role', 'reputation_score', 'avatar', 'headline', 'bio', 'location', 'website_url', 'github_url', 'profile_visibility', 'email_verified_at', 'presence_status', 'last_seen_at', 'presence_updated_at'])]
+#[Fillable(['name', 'email', 'password', 'reputation_score', 'avatar', 'headline', 'bio', 'location', 'website_url', 'github_url', 'profile_visibility', 'email_verified_at', 'presence_status', 'last_seen_at', 'presence_updated_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements JWTSubject, MustVerifyEmailContract
 {

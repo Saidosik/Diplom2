@@ -2,7 +2,7 @@ import { loginSchema } from "@/features/auth/schemas";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/auth/constants";
 import { buildAccessTokenCookieOptions } from "@/lib/auth/cookies";
 import createLaravelApi from "@/lib/http/laravel";
-import axios, { isAxiosError } from "axios";
+import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
             email: body.email,
             password: body.password,
         })
-        console.log(response)
         const token = response.data?.access_token ?? response.data?.token;
         const expiresIn = response.data?.expires_in
 
