@@ -2,7 +2,10 @@
 
 namespace App\Services\Ai;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Ai\Embeddings;
@@ -57,7 +60,8 @@ class AiSdkService
             Log::warning('Laravel AI SDK embeddings failed', [
                 'provider' => $provider,
                 'model' => $model,
-                'message' => $exception->getMessage(),
+                'reason' => $this->classifyException($exception),
+                'message' => Str::limit($exception->getMessage(), 500, ''),
             ]);
 
             return null;
@@ -66,7 +70,18 @@ class AiSdkService
 
     public function text(string $instructions, string $prompt, array $options = []): ?string
     {
+        $provider = (string) ($options['provider'] ?? config('ai.provider', 'openrouter'));
+
+        if ($provider === 'openrouter') {
+            return $this->openRouterText($instructions, $prompt, $options);
+        }
+
         if (! function_exists('Laravel\\Ai\\agent')) {
+            Log::warning('Laravel AI SDK text generation unavailable', [
+                'provider' => $provider,
+                'reason' => 'sdk_agent_function_missing',
+            ]);
+
             return null;
         }
 
@@ -95,7 +110,8 @@ class AiSdkService
             Log::warning('Laravel AI SDK text generation failed', [
                 'provider' => config('ai.provider'),
                 'model' => config('ai.models.chat'),
-                'message' => $exception->getMessage(),
+                'reason' => $this->classifyException($exception),
+                'message' => Str::limit($exception->getMessage(), 500, ''),
             ]);
 
             return null;
@@ -145,7 +161,9 @@ class AiSdkService
         } catch (\Throwable $exception) {
             Log::warning('Laravel AI SDK reranking failed', [
                 'provider' => config('ai.reranking.provider'),
-                'message' => $exception->getMessage(),
+                'model' => config('ai.reranking.model'),
+                'reason' => $this->classifyException($exception),
+                'message' => Str::limit($exception->getMessage(), 500, ''),
             ]);
 
             return null;
@@ -181,6 +199,180 @@ class AiSdkService
         $provider = (string) config('ai.provider', 'openai');
         $key = Arr::get(config('ai.providers', []), $provider . '.key');
 
-        return is_string($key) && trim($key) !== '';
+        return is_string($key) && trim($key) !== '' && ! $this->looksLikeUnexpandedEnvReference($key);
+    }
+
+    private function openRouterText(string $instructions, string $prompt, array $options = []): ?string
+    {
+        $apiKey = (string) (config('ai.providers.openrouter.key') ?: '');
+        $baseUrl = rtrim((string) (config('ai.providers.openrouter.url') ?: 'https://openrouter.ai/api/v1'), '/');
+        $model = (string) ($options['model'] ?? config('ai.models.chat'));
+        $timeout = max(1, (int) config('ai.generation.timeout', 40));
+
+        if (trim($apiKey) === '' || $this->looksLikeUnexpandedEnvReference($apiKey)) {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'model' => $model,
+                'reason' => 'missing_api_key',
+            ]);
+
+            return null;
+        }
+
+        if (trim($baseUrl) === '' || $this->looksLikeUnexpandedEnvReference($baseUrl)) {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'model' => $model,
+                'reason' => 'invalid_base_url',
+                'base_url' => $this->safeUrlForLog($baseUrl),
+            ]);
+
+            return null;
+        }
+
+        if (trim($model) === '') {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'reason' => 'invalid_model',
+            ]);
+
+            return null;
+        }
+
+        $url = $baseUrl . '/chat/completions';
+
+        try {
+            $response = Http::timeout($timeout)
+                ->retry(2, 750, fn (\Exception $exception, mixed $request): bool => $exception instanceof ConnectionException)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->asJson()
+                ->post($url, [
+                    'model' => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $instructions],
+                        ['role' => 'user', 'content' => $prompt],
+                    ],
+                    'temperature' => (float) config('ai.generation.temperature', 0.2),
+                    'max_tokens' => (int) config('ai.generation.max_tokens', 1600),
+                ]);
+        } catch (ConnectionException $exception) {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'model' => $model,
+                'reason' => 'network_error',
+                'message' => Str::limit($exception->getMessage(), 500, ''),
+            ]);
+
+            return null;
+        } catch (\Throwable $exception) {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'model' => $model,
+                'reason' => $this->classifyException($exception),
+                'message' => Str::limit($exception->getMessage(), 500, ''),
+            ]);
+
+            return null;
+        }
+
+        if (! $response->successful()) {
+            $this->logOpenRouterHttpFailure($response, $model);
+
+            return null;
+        }
+
+        $content = $response->json('choices.0.message.content');
+
+        if (! is_string($content) || trim($content) === '') {
+            Log::warning('OpenRouter text generation failed', [
+                'provider' => 'openrouter',
+                'model' => $model,
+                'reason' => 'bad_response_body',
+                'status' => $response->status(),
+                'body_preview' => $this->safeBodyPreview($response),
+            ]);
+
+            return null;
+        }
+
+        return trim($content);
+    }
+
+    private function logOpenRouterHttpFailure(Response $response, string $model): void
+    {
+        Log::warning('OpenRouter text generation failed', [
+            'provider' => 'openrouter',
+            'model' => $model,
+            'reason' => $this->classifyStatus($response->status(), $response->body()),
+            'status' => $response->status(),
+            'body_preview' => $this->safeBodyPreview($response),
+        ]);
+    }
+
+    private function classifyException(\Throwable $exception): string
+    {
+        $message = Str::lower($exception->getMessage());
+
+        return match (true) {
+            str_contains($message, 'timed out'), str_contains($message, 'timeout') => 'timeout',
+            str_contains($message, '401'), str_contains($message, 'unauthorized'), str_contains($message, 'api key') => 'invalid_credentials',
+            str_contains($message, '403'), str_contains($message, 'forbidden') => 'invalid_credentials',
+            str_contains($message, '404'), str_contains($message, 'model') => 'invalid_model',
+            str_contains($message, '429'), str_contains($message, 'rate limit') => 'rate_limit',
+            str_contains($message, 'endpoint') => 'unsupported_endpoint',
+            default => 'provider_unavailable',
+        };
+    }
+
+    private function classifyStatus(int $status, string $body = ''): string
+    {
+        $body = Str::lower($body);
+
+        return match (true) {
+            $status === 401 || $status === 403 => 'invalid_credentials',
+            $status === 404 || str_contains($body, 'model') => 'invalid_model',
+            $status === 408 => 'timeout',
+            $status === 429 => 'rate_limit',
+            $status >= 500 => 'provider_unavailable',
+            str_contains($body, 'endpoint') => 'unsupported_endpoint',
+            default => 'bad_response_body',
+        };
+    }
+
+    private function safeBodyPreview(Response $response): string
+    {
+        $json = $response->json();
+
+        if (is_array($json)) {
+            $safe = array_filter([
+                'error_code' => Arr::get($json, 'error.code'),
+                'error_type' => Arr::get($json, 'error.type'),
+                'message' => Arr::get($json, 'error.message') ?: Arr::get($json, 'message'),
+            ], fn ($value) => is_scalar($value) && $value !== '');
+
+            if ($safe !== []) {
+                return $this->redactSecrets(Str::limit(json_encode($safe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '', 1000, ''));
+            }
+        }
+
+        return $this->redactSecrets(Str::limit($response->body(), 300, ''));
+    }
+
+    private function safeUrlForLog(string $url): string
+    {
+        return $this->redactSecrets(Str::limit($url, 300, ''));
+    }
+
+    private function redactSecrets(string $value): string
+    {
+        return preg_replace('/sk-or-[A-Za-z0-9_\-]+/', 'sk-or-***', $value) ?? $value;
+    }
+
+    private function looksLikeUnexpandedEnvReference(string $value): bool
+    {
+        $value = trim($value);
+
+        return preg_match('/^\$\{[A-Z0-9_]+\}$/', $value) === 1;
     }
 }
