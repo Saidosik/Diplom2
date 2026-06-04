@@ -25,7 +25,7 @@ async function readProxyBody(request: NextRequest): Promise<string | Buffer | un
 
 async function proxyLaravelStream(request: NextRequest, endpoint: string) {
     const token = await getAccessTokenCookie()
-    const baseURL = process.env.NEXT_PUBLIC_LARAVEL_API_URL
+    const baseURL = (process.env.LARAVEL_API_URL ?? process.env.NEXT_PUBLIC_LARAVEL_API_URL)
 
     if (!baseURL) {
         return NextResponse.json({ message: "Laravel API no defined" }, { status: 500 })

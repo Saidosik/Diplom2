@@ -1,0 +1,161 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        NEXT_PUBLIC_REVERB_APP_KEY: local-app-key
+    env_file:
+      - ./frontend/.env.docker.example
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      LARAVEL_API_URL: http://backend:8000/api
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.docker.example
+    environment:
+      APP_URL: http://backend:8000
+      FRONTEND_URL: http://localhost:3000
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/up >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  queue:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.docker.example
+    environment:
+      APP_URL: http://backend:8000
+      FRONTEND_URL: http://localhost:3000
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=120
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.docker.example
+    environment:
+      APP_URL: http://backend:8000
+      FRONTEND_URL: http://localhost:3000
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    command: sh -c 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend-storage:/var/www/html/storage
+    restart: unless-stopped
+
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env.docker.example
+    environment:
+      APP_URL: http://backend:8000
+      FRONTEND_URL: http://localhost:3000
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: 8080
+      REVERB_HOST: reverb
+      REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
+    expose:
+      - "8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: diplom
+      POSTGRES_USER: diplom
+      POSTGRES_PASSWORD: diplom
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diplom -d diplom"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  backend-storage:

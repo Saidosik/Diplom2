@@ -16,7 +16,7 @@ import { createGroupChat, getConversations, openDirectChat } from "@/features/ch
 import { getFriends } from "@/features/social/api"
 import { getMe } from "@/features/auth/api"
 import { getEcho } from "@/lib/realtime/echo"
-import type { ChatConversation } from "@/features/chat/types"
+import type { ChatConversation, Paginated } from "@/features/chat/types"
 
 function initials(name?: string | null) {
     return (name ?? "C").split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()
@@ -82,7 +82,7 @@ export function ChatsPage() {
 
         const channel = echo.private(`users.${userId}`)
         channel.listen(".chat.conversation.updated", (payload: ConversationUpdatedPayload) => {
-            queryClient.setQueryData(["chats", "conversations"], (current: any) => {
+            queryClient.setQueryData(["chats", "conversations"], (current: Paginated<ChatConversation> | undefined) => {
                 if (!current?.data || !payload.conversation) return current
                 const next = [payload.conversation, ...current.data.filter((conversation: ChatConversation) => conversation.id !== payload.conversation.id)]
                 return { ...current, data: next }
