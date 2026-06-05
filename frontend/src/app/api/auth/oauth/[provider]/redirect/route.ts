@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import createLaravelApi from '@/lib/http/laravel';
 import { getOAuthStateCookieName } from '@/lib/auth/constants';
+import { buildSiteUrl } from '@/lib/site-url';
 
 const allowedProviders = ['google', 'yandex'];
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
 
     return NextResponse.redirect(
-      new URL('/auth?error=oauth_redirect_failed', request.url),
+      buildSiteUrl('/auth?error=oauth_redirect_failed'),
     );
   }
 }
