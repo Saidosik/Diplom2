@@ -13,6 +13,7 @@ import {
     SidebarMenuBadge,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from "@/components/ui/sidebar"
 
 function isActivePath(pathname: string, href: string) {
@@ -25,6 +26,13 @@ function isActivePath(pathname: string, href: string) {
 
 export function NavMain({ user = null }: { user?: User | null }) {
     const pathname = usePathname()
+    const { isMobile, setOpenMobile } = useSidebar()
+
+    function canSeeItem(item: NavigationItem) {
+        if (item.visibility === "auth" && !user) return false
+        if (item.visibility === "guest" && user) return false
+
+        if (!item.roles || item.roles.length === 0) return true
 
     function canSeeItem(item: NavigationItem) {
         if (item.visibility === "auth" && !user) return false
@@ -55,29 +63,36 @@ export function NavMain({ user = null }: { user?: User | null }) {
                                 const Icon = item.icon
                                 const isActive = isActivePath(pathname, item.href)
 
-                                return (
-                                    <SidebarMenuItem key={item.href}>
-                                        {item.disabled ? (
-                                            <SidebarMenuButton
-                                                disabled
-                                                tooltip={item.title}
-                                                className="opacity-60"
-                                            >
-                                                <Icon />
-                                                <span>{item.title}</span>
-                                            </SidebarMenuButton>
-                                        ) : (
-                                            <SidebarMenuButton
-                                                asChild
-                                                isActive={isActive}
-                                                tooltip={item.title}
-                                            >
-                                                <Link href={item.href}>
+                                    return (
+                                        <SidebarMenuItem key={item.href}>
+                                            {item.disabled ? (
+                                                <SidebarMenuButton
+                                                    disabled
+                                                    tooltip={item.title}
+                                                    className="opacity-60"
+                                                >
                                                     <Icon />
                                                     <span>{item.title}</span>
-                                                </Link>
-                                            </SidebarMenuButton>
-                                        )}
+                                                </SidebarMenuButton>
+                                            ) : (
+                                                <SidebarMenuButton
+                                                    asChild
+                                                    isActive={isActive}
+                                                    tooltip={item.title}
+                                                >
+                                                    <Link
+                                                        href={item.href}
+                                                        onClick={() => {
+                                                            if (isMobile) {
+                                                                setOpenMobile(false)
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Icon />
+                                                        <span>{item.title}</span>
+                                                    </Link>
+                                                </SidebarMenuButton>
+                                            )}
 
                                         {item.badge && (
                                             <SidebarMenuBadge>
