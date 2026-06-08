@@ -6,12 +6,12 @@ This setup keeps the existing BFF architecture:
 browser -> Next.js frontend -> Laravel API
 ```
 
-Only the `frontend` service publishes a host port (`3000:3000`). Laravel, PostgreSQL, Redis, queue workers, scheduler, and Reverb stay on the internal Compose network.
+The `frontend` service publishes `3000:3000`, and the local `backend` service publishes `8000:8000` for direct Laravel debugging. PostgreSQL, Redis, queue workers, scheduler, and Reverb stay on the internal Compose network.
 
 ## Services
 
 - `frontend`: Next.js production server on `0.0.0.0:3000`.
-- `backend`: Laravel API on the internal Docker DNS name `backend:8000`.
+- `backend`: Laravel API on the internal Docker DNS name `backend:8000` and on the host at `http://localhost:8000`.
 - `queue`: Laravel queue worker using Redis.
 - `scheduler`: Laravel scheduler loop.
 - `reverb`: Laravel Reverb server on the internal Docker DNS name `reverb:8080`.
@@ -21,8 +21,9 @@ Only the `frontend` service publishes a host port (`3000:3000`). Laravel, Postgr
 ## URLs and ports
 
 - Public host port: `http://localhost:3000` -> `frontend:3000`.
+- Local Laravel debug port: `http://localhost:8000` -> `backend:8000`.
 - Internal Laravel API URL for Next.js BFF: `LARAVEL_API_URL=http://backend:8000/api`.
-- No host ports are published for Laravel, PostgreSQL, Redis, queue, scheduler, or Reverb.
+- PostgreSQL, Redis, queue, scheduler, and Reverb do not publish host ports in the local Compose file.
 
 ## Environment files
 

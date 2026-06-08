@@ -125,3 +125,17 @@ export type PublicationCollectionResponse = {
 export type PublicationSingleResponse = {
     data: Publication
 }
+
+export type PopularPublicationPeriod = "day" | "week" | "month" | "all"
+
+export type PopularPublicationsResponse = {
+    data: Publication[]
+    meta: {
+        period: PopularPublicationPeriod
+        limit: number
+        current_page: number
+        next_page: number | null
+        has_more: boolean
+        total: number
+    }
+}

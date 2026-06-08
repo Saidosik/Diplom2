@@ -116,7 +116,7 @@ export type CommunityOverview = {
 }
 
 export type CommunityDiscovery = CommunityOverview & {
-    period: "day" | "week" | "month"
+    period: "day" | "week" | "month" | "all"
     personalized?: boolean
     feed: CommunityFeedItem[]
     recommendations: CommunityRecommendation[]

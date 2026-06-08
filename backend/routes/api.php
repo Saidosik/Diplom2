@@ -61,6 +61,7 @@ Route::get('/tags', [TagController::class, 'index']);
 Route::get('/tags/{tag:slug}', [TagController::class, 'show']);
 Route::get('/community/overview', CommunityOverviewController::class);
 Route::get('/community/discovery', [CommunityDiscoveryController::class, 'discovery']);
+Route::get('/community/popular-publications', [CommunityDiscoveryController::class, 'popularPublications']);
 Route::get('/community/feed', [CommunityDiscoveryController::class, 'feed']);
 Route::get('/community/trends', [CommunityDiscoveryController::class, 'trends']);
 Route::get('/community/recommendations', [CommunityDiscoveryController::class, 'recommendations']);
