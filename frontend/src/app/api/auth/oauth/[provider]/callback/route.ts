@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, getOAuthStateCookieName } from '@/lib/auth/constants';
 import { buildAccessTokenCookieOptions } from '@/lib/auth/cookies';
 import createLaravelApi from '@/lib/http/laravel';
+import { buildSiteUrl } from '@/lib/site-url';
 
 const allowedProviders = ['google', 'yandex'];
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   if (!allowedProviders.includes(provider)) {
     return NextResponse.redirect(
-      new URL('/auth?error=provider_not_supported', request.url),
+      buildSiteUrl('/auth?error=provider_not_supported'),
     );
   }
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   if (!stateFromQuery || !stateFromCookie || stateFromQuery !== stateFromCookie) {
     const result = NextResponse.redirect(
-      new URL('/auth?error=oauth_state_invalid', request.url),
+      buildSiteUrl('/auth?error=oauth_state_invalid'),
     );
 
     result.cookies.delete(stateCookieName);
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     if (!token) {
       const result = NextResponse.redirect(
-        new URL('/auth?error=token_missing', request.url),
+        buildSiteUrl('/auth?error=token_missing'),
       );
 
       result.cookies.delete(stateCookieName);
@@ -56,8 +57,8 @@ export async function GET(request: NextRequest, { params }: Params) {
       return result;
     }
     const result = NextResponse.redirect(
-      new URL(`/profile?oauth=success&provider=${provider}`, request.url)
-    )
+      buildSiteUrl(`/profile?oauth=success&provider=${provider}`),
+    );
 
     result.cookies.set(
       ACCESS_TOKEN_COOKIE,
@@ -75,9 +76,8 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
 
     const result = NextResponse.redirect(
-      new URL(
+      buildSiteUrl(
         `/auth?mode=login&oauth=error&provider=${provider}&message=Не удалось войти через сервис`,
-        request.url
       )
     );
 
