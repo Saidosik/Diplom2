@@ -28,7 +28,12 @@ export function NavMain({ user = null }: { user?: User | null }) {
     const pathname = usePathname()
     const { isMobile, setOpenMobile } = useSidebar()
 
-    // Keep one visibility gate for public/auth/guest and role-based sidebar items.
+    function canSeeItem(item: NavigationItem) {
+        if (item.visibility === "auth" && !user) return false
+        if (item.visibility === "guest" && user) return false
+
+        if (!item.roles || item.roles.length === 0) return true
+
     function canSeeItem(item: NavigationItem) {
         if (item.visibility === "auth" && !user) return false
         if (item.visibility === "guest" && user) return false
@@ -55,8 +60,8 @@ export function NavMain({ user = null }: { user?: User | null }) {
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {visibleItems.map((item) => {
-                                    const Icon = item.icon
-                                    const isActive = isActivePath(pathname, item.href)
+                                const Icon = item.icon
+                                const isActive = isActivePath(pathname, item.href)
 
                                     return (
                                         <SidebarMenuItem key={item.href}>
@@ -89,13 +94,13 @@ export function NavMain({ user = null }: { user?: User | null }) {
                                                 </SidebarMenuButton>
                                             )}
 
-                                            {item.badge && (
-                                                <SidebarMenuBadge>
-                                                    {item.badge}
-                                                </SidebarMenuBadge>
-                                            )}
-                                        </SidebarMenuItem>
-                                    )
+                                        {item.badge && (
+                                            <SidebarMenuBadge>
+                                                {item.badge}
+                                            </SidebarMenuBadge>
+                                        )}
+                                    </SidebarMenuItem>
+                                )
                                 })}
                             </SidebarMenu>
                         </SidebarGroupContent>
