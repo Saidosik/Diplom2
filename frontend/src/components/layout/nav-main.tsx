@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-import { navigationGroups } from "@/config/navigation"
+import { navigationGroups, type NavigationItem } from "@/config/navigation"
 import type { User } from "@/features/auth/types"
 import {
     SidebarGroup,
@@ -16,27 +16,42 @@ import {
 } from "@/components/ui/sidebar"
 
 function isActivePath(pathname: string, href: string) {
+    if (href === "/") {
+        return pathname === "/"
+    }
+
     return pathname === href || pathname.startsWith(`${href}/`)
 }
 
 export function NavMain({ user = null }: { user?: User | null }) {
     const pathname = usePathname()
 
-    function canSeeItem(roles?: Array<"user" | "admin" | "moderator">) {
-        if (!roles || roles.length === 0) return true
+    function canSeeItem(item: NavigationItem) {
+        if (item.visibility === "auth" && !user) return false
+        if (item.visibility === "guest" && user) return false
+
+        if (!item.roles || item.roles.length === 0) return true
+
         const role = user?.role ?? "user"
-        return roles.includes(role as "user" | "admin" | "moderator")
+        return item.roles.includes(role as "user" | "admin" | "moderator")
     }
 
     return (
         <>
-            {navigationGroups.map((group) => (
-                <SidebarGroup key={group.title}>
-                    <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            {navigationGroups.map((group) => {
+                const visibleItems = group.items.filter(canSeeItem)
 
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {group.items.filter((item) => canSeeItem(item.roles)).map((item) => {
+                if (visibleItems.length === 0) {
+                    return null
+                }
+
+                return (
+                    <SidebarGroup key={group.title}>
+                        <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {visibleItems.map((item) => {
                                 const Icon = item.icon
                                 const isActive = isActivePath(pathname, item.href)
 
@@ -71,11 +86,12 @@ export function NavMain({ user = null }: { user?: User | null }) {
                                         )}
                                     </SidebarMenuItem>
                                 )
-                            })}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-            ))}
+                                })}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )
+            })}
         </>
     )
 }
