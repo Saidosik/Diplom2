@@ -4,6 +4,8 @@ import type {
     PublicationCollectionResponse,
     PublicationPayload,
     PublicationSingleResponse,
+    PopularPublicationPeriod,
+    PopularPublicationsResponse,
 } from "@/features/publications/types"
 
 function unwrapPublication(payload: PublicationSingleResponse | Publication): Publication {
@@ -27,5 +29,11 @@ export async function deletePublication(id: number) {
 
 export async function getMyPublications(params?: Record<string, string | number | undefined>) {
     const response = await browserApi.get<PublicationCollectionResponse>("/laravel/me/publications", { params })
+    return response.data
+}
+
+
+export async function getPopularPublications(params?: { period?: PopularPublicationPeriod; limit?: number; page?: number }) {
+    const response = await browserApi.get<PopularPublicationsResponse>("/publications/popular", { params })
     return response.data
 }

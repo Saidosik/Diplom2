@@ -31,6 +31,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from "@/components/ui/sidebar"
 import { logout } from "@/features/auth/api"
 import { safeRequest } from "@/lib/http/api-errors"
@@ -42,6 +43,13 @@ type SidebarUserProps = {
 export function SidebarUser({ user }: SidebarUserProps) {
     const router = useRouter()
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+    const { isMobile, setOpenMobile } = useSidebar()
+
+    function closeMobileSidebar() {
+        if (isMobile) {
+            setOpenMobile(false)
+        }
+    }
 
     async function handleLogout() {
         try {
@@ -69,7 +77,7 @@ export function SidebarUser({ user }: SidebarUserProps) {
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton asChild size="lg" tooltip="Войти">
-                        <Link href="/auth?mode=login">
+                        <Link href="/auth?mode=login" onClick={closeMobileSidebar}>
                             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
                                 <LogIn className="size-4" />
                             </div>
@@ -83,7 +91,7 @@ export function SidebarUser({ user }: SidebarUserProps) {
 
                 <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                     <SidebarMenuButton asChild>
-                        <Link href="/auth?mode=register">
+                        <Link href="/auth?mode=register" onClick={closeMobileSidebar}>
                             <UserPlus />
                             <span>Создать профиль</span>
                         </Link>
@@ -163,14 +171,14 @@ export function SidebarUser({ user }: SidebarUserProps) {
                         <DropdownMenuSeparator />
 
                         <DropdownMenuItem asChild>
-                            <Link href="/profile">
+                            <Link href="/profile" onClick={closeMobileSidebar}>
                                 <UserRound />
                                 Профиль
                             </Link>
                         </DropdownMenuItem>
 
                         <DropdownMenuItem asChild>
-                            <Link href="/settings">
+                            <Link href="/settings" onClick={closeMobileSidebar}>
                                 <Settings />
                                 Настройки
                             </Link>
@@ -178,7 +186,7 @@ export function SidebarUser({ user }: SidebarUserProps) {
 
                         {(user.meta?.isStaff || user.meta?.isAdmin || user.role === "admin" || user.role === "moderator") && (
                             <DropdownMenuItem asChild>
-                                <Link href="/admin">
+                                <Link href="/admin" onClick={closeMobileSidebar}>
                                     <ShieldCheck />
                                     Админ-панель
                                 </Link>
