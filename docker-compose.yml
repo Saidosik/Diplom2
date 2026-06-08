@@ -34,6 +34,8 @@ services:
       REDIS_HOST: redis
       REVERB_HOST: reverb
       REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
     expose:
       - "8000"
     depends_on:
