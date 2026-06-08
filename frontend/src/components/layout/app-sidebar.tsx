@@ -12,9 +12,10 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-    SidebarRail,
     SidebarSeparator,
+    SidebarTrigger,
 } from "@/components/ui/sidebar"
+
 
 type AppSidebarProps = {
     user: User | null
@@ -22,23 +23,25 @@ type AppSidebarProps = {
 
 export function AppSidebar({ user }: AppSidebarProps) {
     return (
-        <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader className="p-2">
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton
-                            asChild
-                            size="lg"
-                            tooltip="Вектор"
-                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                        >
-                            <SiteBrand href="/" size="sm" className="gap-3" nameClassName="text-sm" />
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarHeader>
+        <Sidebar collapsible="icon" variant="sidebar">
+            <SidebarHeader>
+                <div className="flex h-full min-w-0 items-center gap-2">
+                    <SidebarMenu className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                asChild
+                                size="lg"
+                                tooltip="Вектор"
+                                className="h-11 px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                            >
+                                <SiteBrand href="/" size="sm" className="gap-3" nameClassName="text-sm" />
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
 
-            <SidebarSeparator />
+                    <SidebarTrigger className="ml-auto size-9 shrink-0 group-data-[collapsible=icon]:mx-auto" />
+                </div>
+            </SidebarHeader>
 
             <SidebarContent>
                 <NavMain user={user} />
@@ -46,11 +49,9 @@ export function AppSidebar({ user }: AppSidebarProps) {
 
             <SidebarSeparator />
 
-            <SidebarFooter className="p-2">
+            <SidebarFooter>
                 <SidebarUser user={user} />
             </SidebarFooter>
-
-            <SidebarRail />
         </Sidebar>
     )
 }
