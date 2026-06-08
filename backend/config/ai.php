@@ -13,6 +13,9 @@ return [
     */
 
     'provider' => env('AI_PROVIDER', 'openrouter'),
+    'default' => env('AI_PROVIDER', 'openrouter'),
+    'default_for_embeddings' => env('AI_EMBEDDING_PROVIDER', env('AI_PROVIDER', 'openrouter')),
+    'default_for_reranking' => env('AI_RERANK_PROVIDER'),
 
     'models' => [
         'chat' => env('AI_CHAT_MODEL', 'deepseek/deepseek-v4-flash:free'),
@@ -168,8 +171,8 @@ return [
         ],
         'openrouter' => [
             'driver' => 'openrouter',
-            'key' => env('OPENROUTER_API_KEY'),
-            'url' => env('OPENROUTER_BASE_URL'),
+            'key' => env('OPENROUTER_API_KEY') ?: env('AI_API_KEY'),
+            'url' => env('OPENROUTER_BASE_URL') ?: env('AI_BASE_URL', 'https://openrouter.ai/api/v1'),
         ],
         'cohere' => [
             'driver' => 'cohere',
