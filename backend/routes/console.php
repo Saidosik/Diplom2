@@ -14,7 +14,7 @@ Artisan::command('ai:reindex', function () {
     $this->info('AI RAG индекс пересобран. Documents: ' . $stats['documents'] . ', chunks: ' . $stats['chunks']);
 })->purpose('Rebuild AI RAG knowledge index from platform content');
 
-$diagnoseOpenRouter = function () {
+Artisan::command('ai:openrouter:diagnose {--chat : Also send a minimal chat completions request}', function () {
     $provider = (string) config('ai.provider', 'openrouter');
     $apiKey = (string) (config('ai.providers.openrouter.key') ?: '');
     $baseUrl = rtrim((string) (config('ai.providers.openrouter.url') ?: 'https://openrouter.ai/api/v1'), '/');
@@ -59,13 +59,7 @@ $diagnoseOpenRouter = function () {
 
     $this->line('chat_status=' . $chatResponse->status());
     $this->line('chat_body_preview=' . safe_ai_cli_value(Str::limit($chatResponse->body(), 800, '')));
-};
-
-Artisan::command('ai:openrouter:diagnose {--chat : Also send a minimal chat completions request}', $diagnoseOpenRouter)
-    ->purpose('Safely diagnose OpenRouter connectivity and chat completions');
-
-Artisan::command('ai:diagnose-openrouter {--chat : Also send a minimal chat completions request}', $diagnoseOpenRouter)
-    ->purpose('Safely diagnose OpenRouter connectivity and chat completions');
+})->purpose('Safely diagnose OpenRouter connectivity and chat completions');
 
 if (! function_exists('safe_ai_cli_value')) {
     function safe_ai_cli_value(string $value): string
