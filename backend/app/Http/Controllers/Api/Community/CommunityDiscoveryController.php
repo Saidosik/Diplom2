@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use Throwable;
 
@@ -31,7 +32,7 @@ class CommunityDiscoveryController extends Controller
         $user = $this->optionalUser($request);
         $profile = $this->userInterestProfile($user);
 
-        $popularPublications = $this->popularPublications($since, 12);
+        $popularPublications = $this->popularPublicationsCollection($since, 12);
         $popularQuestions = $this->popularQuestions($since, 12);
         $unansweredQuestions = $this->unansweredQuestions(6);
         $topUsers = $this->topUsers(8);
@@ -58,6 +59,38 @@ class CommunityDiscoveryController extends Controller
         ]);
     }
 
+
+    public function popularPublications(Request $request): JsonResponse
+    {
+        $period = $this->period($request);
+        $limit = max(1, min(24, (int) $request->query('limit', 6)));
+        $page = max(1, (int) $request->query('page', 1));
+        $cacheKey = sprintf('community:popular-publications:%s:%d:%d', $period, $limit, $page);
+
+        $payload = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($period, $limit, $page, $request) {
+            $since = $this->periodStart($period);
+            $offset = ($page - 1) * $limit;
+            $take = $offset + $limit + 1;
+            $publications = $this->popularPublicationsCollection($since, $take);
+            $pageItems = $publications->slice($offset, $limit)->values();
+            $hasMore = $publications->count() > ($offset + $limit);
+
+            return [
+                'data' => PublicationResource::collection($pageItems)->resolve($request),
+                'meta' => [
+                    'period' => $period,
+                    'limit' => $limit,
+                    'current_page' => $page,
+                    'next_page' => $hasMore ? $page + 1 : null,
+                    'has_more' => $hasMore,
+                    'total' => $publications->count(),
+                ],
+            ];
+        });
+
+        return response()->json($payload);
+    }
+
     public function feed(Request $request): JsonResponse
     {
         $period = $this->period($request);
@@ -66,7 +99,7 @@ class CommunityDiscoveryController extends Controller
         return response()->json([
             'period' => $period,
             'data' => $this->buildFeed(
-                $this->popularPublications($since, 6),
+                $this->popularPublicationsCollection($since, 6),
                 $this->popularQuestions($since, 6),
                 $this->unansweredQuestions(4),
             ),
@@ -81,7 +114,7 @@ class CommunityDiscoveryController extends Controller
         return response()->json([
             'period' => $period,
             'data' => $this->buildTrends(
-                $this->popularPublications($since, 6),
+                $this->popularPublicationsCollection($since, 6),
                 $this->popularQuestions($since, 6),
                 $this->popularTags($since, 12),
             ),
@@ -99,7 +132,7 @@ class CommunityDiscoveryController extends Controller
             'period' => $period,
             'personalized' => $user !== null,
             'data' => $this->buildRecommendations(
-                $this->popularPublications($since, 18),
+                $this->popularPublicationsCollection($since, 18),
                 $this->popularQuestions($since, 18),
                 $this->popularTags($since, 18),
                 $user,
@@ -156,7 +189,7 @@ class CommunityDiscoveryController extends Controller
     {
         $period = (string) $request->query('period', 'week');
 
-        return in_array($period, ['day', 'week', 'month'], true) ? $period : 'week';
+        return in_array($period, ['day', 'week', 'month', 'all'], true) ? $period : 'week';
     }
 
     private function periodStart(string $period): Carbon
@@ -164,6 +197,7 @@ class CommunityDiscoveryController extends Controller
         return match ($period) {
             'day' => now()->subDay(),
             'month' => now()->subMonth(),
+            'all' => Carbon::create(1970, 1, 1),
             default => now()->subWeek(),
         };
     }
@@ -201,7 +235,7 @@ class CommunityDiscoveryController extends Controller
     /**
      * @return Collection<int, Publication>
      */
-    private function popularPublications(Carbon $since, int $limit): Collection
+    private function popularPublicationsCollection(Carbon $since, int $limit): Collection
     {
         return Publication::query()
             ->published()

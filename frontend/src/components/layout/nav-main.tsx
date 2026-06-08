@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-import { navigationGroups } from "@/config/navigation"
+import { navigationGroups, type NavigationItem } from "@/config/navigation"
 import type { User } from "@/features/auth/types"
 import {
     SidebarGroup,
@@ -13,69 +13,95 @@ import {
     SidebarMenuBadge,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from "@/components/ui/sidebar"
 
 function isActivePath(pathname: string, href: string) {
+    if (href === "/") {
+        return pathname === "/"
+    }
+
     return pathname === href || pathname.startsWith(`${href}/`)
 }
 
 export function NavMain({ user = null }: { user?: User | null }) {
     const pathname = usePathname()
+    const { isMobile, setOpenMobile } = useSidebar()
 
-    function canSeeItem(roles?: Array<"user" | "admin" | "moderator">) {
-        if (!roles || roles.length === 0) return true
+    // Keep one visibility gate for public/auth/guest and role-based sidebar items.
+    function canSeeItem(item: NavigationItem) {
+        if (item.visibility === "auth" && !user) return false
+        if (item.visibility === "guest" && user) return false
+
+        if (!item.roles || item.roles.length === 0) return true
+
         const role = user?.role ?? "user"
-        return roles.includes(role as "user" | "admin" | "moderator")
+        return item.roles.includes(role as "user" | "admin" | "moderator")
     }
 
     return (
         <>
-            {navigationGroups.map((group) => (
-                <SidebarGroup key={group.title}>
-                    <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+            {navigationGroups.map((group) => {
+                const visibleItems = group.items.filter(canSeeItem)
 
-                    <SidebarGroupContent>
-                        <SidebarMenu>
-                            {group.items.filter((item) => canSeeItem(item.roles)).map((item) => {
-                                const Icon = item.icon
-                                const isActive = isActivePath(pathname, item.href)
+                if (visibleItems.length === 0) {
+                    return null
+                }
 
-                                return (
-                                    <SidebarMenuItem key={item.href}>
-                                        {item.disabled ? (
-                                            <SidebarMenuButton
-                                                disabled
-                                                tooltip={item.title}
-                                                className="opacity-60"
-                                            >
-                                                <Icon />
-                                                <span>{item.title}</span>
-                                            </SidebarMenuButton>
-                                        ) : (
-                                            <SidebarMenuButton
-                                                asChild
-                                                isActive={isActive}
-                                                tooltip={item.title}
-                                            >
-                                                <Link href={item.href}>
+                return (
+                    <SidebarGroup key={group.title}>
+                        <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {visibleItems.map((item) => {
+                                    const Icon = item.icon
+                                    const isActive = isActivePath(pathname, item.href)
+
+                                    return (
+                                        <SidebarMenuItem key={item.href}>
+                                            {item.disabled ? (
+                                                <SidebarMenuButton
+                                                    disabled
+                                                    tooltip={item.title}
+                                                    className="opacity-60"
+                                                >
                                                     <Icon />
                                                     <span>{item.title}</span>
-                                                </Link>
-                                            </SidebarMenuButton>
-                                        )}
+                                                </SidebarMenuButton>
+                                            ) : (
+                                                <SidebarMenuButton
+                                                    asChild
+                                                    isActive={isActive}
+                                                    tooltip={item.title}
+                                                >
+                                                    <Link
+                                                        href={item.href}
+                                                        onClick={() => {
+                                                            if (isMobile) {
+                                                                setOpenMobile(false)
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Icon />
+                                                        <span>{item.title}</span>
+                                                    </Link>
+                                                </SidebarMenuButton>
+                                            )}
 
-                                        {item.badge && (
-                                            <SidebarMenuBadge>
-                                                {item.badge}
-                                            </SidebarMenuBadge>
-                                        )}
-                                    </SidebarMenuItem>
-                                )
-                            })}
-                        </SidebarMenu>
-                    </SidebarGroupContent>
-                </SidebarGroup>
-            ))}
+                                            {item.badge && (
+                                                <SidebarMenuBadge>
+                                                    {item.badge}
+                                                </SidebarMenuBadge>
+                                            )}
+                                        </SidebarMenuItem>
+                                    )
+                                })}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )
+            })}
         </>
     )
 }

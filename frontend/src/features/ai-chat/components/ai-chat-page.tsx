@@ -25,8 +25,11 @@ import {
     getAiChatMessages,
     getAiChatSessions,
     getAiModels,
+    sendAiChatMessage,
     streamAiChatMessage,
     uploadAiAttachment,
+    AiStreamUnavailableError,
+    aiErrorMessage,
 } from "@/features/ai-chat/api"
 import type { AiAttachment, AiChatMessage, AiChatMode, AiChatSession, AiContextScope, AiModel, AiStreamEvent } from "@/features/ai-chat/types"
 
@@ -222,18 +225,20 @@ export function AiChatPage() {
             },
         ])
 
+        const payload = {
+            message: value,
+            session_id: activeSession?.id ?? null,
+            mode,
+            context_scope: contextScope,
+            type: contextScope === "none" ? "all" : contextScope,
+            model: selectedModel,
+            attachment_ids: selectedAttachments.map((attachment) => attachment.id),
+            user_file_ids: selectedUserFiles.map((file) => file.id),
+        }
+
         try {
             await streamAiChatMessage(
-                {
-                    message: value,
-                    session_id: activeSession?.id ?? null,
-                    mode,
-                    context_scope: contextScope,
-                    type: contextScope === "none" ? "all" : contextScope,
-                    model: selectedModel,
-                    attachment_ids: selectedAttachments.map((attachment) => attachment.id),
-                    user_file_ids: selectedUserFiles.map((file) => file.id),
-                },
+                payload,
                 {
                     onStatus(data) {
                         setSteps((items) => {
@@ -250,12 +255,39 @@ export function AiChatPage() {
                 }
             )
         } catch (error) {
+            const canFallback = error instanceof AiStreamUnavailableError && error.retryable
+
+            if (canFallback) {
+                try {
+                    toast.warning("Потоковый режим недоступен, ответ получен обычным запросом")
+                    const response = await sendAiChatMessage(payload)
+                    replacePendingMessages(pendingUserId, pendingAssistantId, response)
+                    return
+                } catch (fallbackError) {
+                    setMessages((items) => items.filter((item) => item.id !== pendingAssistantId))
+                    toast.error(aiErrorMessage(fallbackError instanceof Error ? fallbackError.message : undefined))
+                    return
+                }
+            }
+
             setMessages((items) => items.filter((item) => item.id !== pendingAssistantId))
             toast.error(error instanceof Error ? error.message : "AI-помощник недоступен")
         } finally {
             setIsSending(false)
             setSteps((items) => items.map((item) => ({ ...item, done: true })))
         }
+    }
+
+
+    function replacePendingMessages(pendingUserId: string, pendingAssistantId: string, response: Awaited<ReturnType<typeof sendAiChatMessage>>) {
+        const [savedUser, savedAssistant] = response.messages
+        setActiveSession(response.session)
+        setSessions((items) => [response.session, ...items.filter((item) => item.id !== response.session.id)])
+        setMessages((items) => items.map((item) => {
+            if (item.id === pendingUserId) return savedUser ?? item
+            if (item.id === pendingAssistantId) return savedAssistant ?? item
+            return item
+        }))
     }
 
     const selectedUserFilesForComposer = React.useMemo(() => userFiles.filter((file) => selectedUserFileIds.includes(file.id)), [selectedUserFileIds, userFiles])

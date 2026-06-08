@@ -17,6 +17,19 @@ export default function RootErrorPage({
         console.error("[ROOT_ERROR]", error)
     }, [error])
 
+    if (isForbiddenError(error)) {
+        return (
+            <StatusPage
+                status="403"
+                eyebrow="Доступ закрыт"
+                title="Недостаточно прав для этого действия"
+                description="Сервер отклонил запрос из-за прав доступа. Войдите другим аккаунтом или вернитесь к публичной ленте сообщества."
+                details="Если вы считаете, что доступ должен быть открыт, обратитесь к администратору проекта."
+                variant="forbidden"
+            />
+        )
+    }
+
     return (
         <StatusPage
             status="500"
@@ -33,4 +46,13 @@ export default function RootErrorPage({
             }
         />
     )
+}
+
+
+function isForbiddenError(error: Error & { digest?: string }) {
+    const maybeStatus = error as Error & { status?: number; response?: { status?: number } }
+
+    return maybeStatus.status === 403
+        || maybeStatus.response?.status === 403
+        || error.message.includes("403")
 }

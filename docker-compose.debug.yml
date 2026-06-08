@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      args:
+        COMPOSER_INSTALL_ARGS: --no-interaction --prefer-dist
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://${VPS_PUBLIC_IP:-localhost}:8000
+      SESSION_SECURE_COOKIE: "false"
+    ports:
+      - "8000:8000"
+
+  queue:
+    build:
+      args:
+        COMPOSER_INSTALL_ARGS: --no-interaction --prefer-dist
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://${VPS_PUBLIC_IP:-localhost}:8000
+      SESSION_SECURE_COOKIE: "false"
+
+  scheduler:
+    build:
+      args:
+        COMPOSER_INSTALL_ARGS: --no-interaction --prefer-dist
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://${VPS_PUBLIC_IP:-localhost}:8000
+      SESSION_SECURE_COOKIE: "false"
+
+  reverb:
+    build:
+      args:
+        COMPOSER_INSTALL_ARGS: --no-interaction --prefer-dist
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      SESSION_SECURE_COOKIE: "false"

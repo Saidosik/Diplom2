@@ -1,11 +1,12 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowRight, Code2, Home, Search } from "lucide-react"
+import { ArrowRight, Code2, Home, LogIn, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { GoBackButton } from "@/components/errors/go-back-button"
 
 type StatusPageProps = {
     status: string
@@ -13,7 +14,8 @@ type StatusPageProps = {
     title: string
     description: string
     details?: string
-    variant?: "not-found" | "server-error"
+    variant?: "not-found" | "server-error" | "forbidden"
+    showLoginAction?: boolean
     action?: ReactNode
 }
 
@@ -25,8 +27,10 @@ export function StatusPage({
     details,
     variant = "not-found",
     action,
+    showLoginAction = false,
 }: StatusPageProps) {
     const isServerError = variant === "server-error"
+    const isForbidden = variant === "forbidden"
 
     return (
         <section className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-10 text-foreground">
@@ -61,12 +65,21 @@ export function StatusPage({
 
                     <div className="flex flex-col gap-3 sm:flex-row">
                         {action}
+                        {showLoginAction ? (
+                            <Button asChild>
+                                <Link href="/auth?mode=login">
+                                    <LogIn className="size-4" />
+                                    Войти
+                                </Link>
+                            </Button>
+                        ) : null}
                         <Button asChild>
                             <Link href="/">
                                 <Home className="size-4" />
                                 На главную
                             </Link>
                         </Button>
+                        <GoBackButton />
                         <Button asChild variant="outline">
                             <Link href="/publications">
                                 <Search className="size-4" />
@@ -93,7 +106,7 @@ export function StatusPage({
                                 "flex aspect-square max-h-72 items-center justify-center rounded-3xl border bg-background/80 p-8",
                                 isServerError && "bg-gradient-to-br from-background to-muted/70"
                             )}>
-                                {isServerError ? <TeapotIllustration /> : <RouteIllustration />}
+                                {isServerError ? <TeapotIllustration /> : isForbidden ? <ForbiddenIllustration /> : <RouteIllustration />}
                             </div>
 
                             <div className="rounded-2xl border bg-muted/30 p-4 font-mono text-sm leading-6">
@@ -104,7 +117,9 @@ export function StatusPage({
                                 <pre className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">
 {isServerError
     ? `status: ${status}\nservice: backend\nmessage: kettle_mode_enabled\nhint: retry_or_report`
-    : `status: ${status}\nroute: not_found\nhint: check_slug_or_search`}
+    : isForbidden
+        ? `status: ${status}\nroute: forbidden\nhint: login_or_request_access`
+        : `status: ${status}\nroute: not_found\nhint: check_slug_or_search`}
                                 </pre>
                             </div>
 
@@ -119,6 +134,28 @@ export function StatusPage({
                 </Card>
             </section>
         </section>
+    )
+}
+
+
+function ForbiddenIllustration() {
+    return (
+        <div className="relative flex size-full min-h-52 items-center justify-center">
+            <div className="absolute inset-4 rounded-3xl border border-primary/20 bg-primary/5" />
+            <div className="relative rounded-3xl border bg-card px-6 py-5 text-center shadow-lg">
+                <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/15 font-mono text-2xl font-semibold text-primary ring-1 ring-primary/25">
+                    403
+                </div>
+                <p className="mt-4 font-mono text-xs uppercase tracking-[0.28em] text-muted-foreground">
+                    access denied
+                </p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                    <span className="h-2 rounded-full bg-primary/80" />
+                    <span className="h-2 rounded-full bg-primary/40" />
+                    <span className="h-2 rounded-full bg-muted" />
+                </div>
+            </div>
+        </div>
     )
 }
 

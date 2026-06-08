@@ -223,3 +223,72 @@ Production compose не монтирует `/var/run/docker.sock` в `backend` �
 - per-user quotas и audit logs.
 
 В этом этапе isolated runner не реализован.
+
+## Debug deploy on VPS
+
+Use the debug override only when you explicitly need direct Laravel debugging on the VPS. It publishes Laravel on `8000:8000`, switches Laravel containers to `APP_ENV=local` / `APP_DEBUG=true`, and builds backend-based services with Composer dev dependencies. **Debug mode exposes Laravel publicly and must not be left enabled permanently.**
+
+Normal production deploy remains production-safe and does not use the debug override:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+Debug deploy flow:
+
+```bash
+cd /path/to/project
+git pull
+
+docker compose -f docker-compose.prod.yml -f docker-compose.debug.yml --env-file .env.production up -d --build
+
+docker compose -f docker-compose.prod.yml -f docker-compose.debug.yml --env-file .env.production exec backend php artisan migrate --force
+
+docker compose -f docker-compose.prod.yml -f docker-compose.debug.yml --env-file .env.production logs -f backend queue scheduler reverb
+```
+
+Open Laravel directly for debugging:
+
+```text
+http://SERVER_IP:8000
+```
+
+Before using this from your workstation, allow `8000/tcp` in the VPS firewall only for the debugging window and preferably only from your IP. Close it again after debugging.
+
+Return back to production mode:
+
+```bash
+cd /path/to/project
+
+docker compose -f docker-compose.prod.yml -f docker-compose.debug.yml --env-file .env.production stop backend queue scheduler reverb
+
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan migrate --force
+
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f backend
+```
+
+Do not use `docker compose down -v` for this switch. Do not delete PostgreSQL volumes and do not reset the production database.
+
+## AI assistant diagnostics
+
+Use these commands when the main AI assistant fails on VPS. They do not print API keys and do not require resetting data:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=300 backend | grep -i "OpenRouter\|AI SDK\|missing_api_key\|invalid_model\|invalid_credentials\|network_error\|rate_limit"
+
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan route:list | grep ai
+
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend curl -s http://127.0.0.1:8000/api/ai/capabilities
+```
+
+If `.env.production` AI values changed, rebuild/restart the backend and clear cached config safely:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan config:clear
+
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build backend queue scheduler reverb
+```
+
+Do not use `docker compose down -v`, do not delete PostgreSQL volumes, and do not reset the production database while debugging AI.

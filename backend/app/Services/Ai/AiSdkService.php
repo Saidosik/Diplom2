@@ -191,12 +191,26 @@ class AiSdkService
             'reranking_provider' => config('ai.reranking.provider'),
             'vector_driver' => config('ai.vector.driver'),
             'external_generation_enabled' => $this->hasAnyProviderKey(),
+            'provider_configured' => $this->hasProviderKey((string) config('ai.provider', 'openrouter')),
+            'chat_models' => collect(config('ai.chat_models', []))
+                ->map(fn ($model) => is_array($model) ? [
+                    'id' => $model['id'] ?? null,
+                    'provider' => $model['provider'] ?? config('ai.provider'),
+                    'default' => (bool) ($model['default'] ?? false),
+                ] : null)
+                ->filter()
+                ->values()
+                ->all(),
         ];
     }
 
     private function hasAnyProviderKey(): bool
     {
-        $provider = (string) config('ai.provider', 'openai');
+        return $this->hasProviderKey((string) config('ai.provider', 'openai'));
+    }
+
+    private function hasProviderKey(string $provider): bool
+    {
         $key = Arr::get(config('ai.providers', []), $provider . '.key');
 
         return is_string($key) && trim($key) !== '' && ! $this->looksLikeUnexpandedEnvReference($key);
