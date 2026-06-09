@@ -4,7 +4,7 @@ namespace App\Support;
 
 class TagColor
 {
-    public const FALLBACK_COLOR = '#008236';
+    public const FALLBACK_COLOR = '#38bdf8';
 
     public static function normalize(?string $color): string
     {
@@ -68,9 +68,9 @@ class TagColor
     public static function label(float $ratio): string
     {
         return match (self::status($ratio)) {
-            'good' => 'Контраст: хороший',
-            'acceptable' => 'Контраст: допустимый',
-            default => 'Контраст: низкий',
+            'good' => 'Хорошо читается',
+            'acceptable' => 'Допустимо',
+            default => 'Плохо читается',
         };
     }
 
