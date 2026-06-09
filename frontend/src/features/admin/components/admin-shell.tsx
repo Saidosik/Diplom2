@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, ScrollText, ShieldCheck, Users } from "lucide-react"
+import { Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
 import type { User } from "@/features/auth/types"
 import { SiteBrand } from "@/components/layout/site-brand"
 import { SidebarUser } from "@/components/layout/sidebar-user"
@@ -31,6 +31,7 @@ const mainItems = [
     { title: "Жалобы", href: "/admin/reports", icon: Flag },
     { title: "Пользователи", href: "/admin/users", icon: Users },
     { title: "Контент", href: "/admin/content", icon: FileText },
+    { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
     { title: "AI индекс", href: "/admin/ai", icon: Database },
 ]
