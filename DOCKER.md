@@ -93,3 +93,55 @@ For production, use a separate isolated runner architecture, for example:
 - monitoring and job timeouts.
 
 Until that isolated runner is added, playground execution jobs may need a separate, explicitly reviewed runner deployment.
+
+## Demo media seeding
+
+The demo media seeder is intentionally **manual** and is not called from `DatabaseSeeder`, so it will not run in production unless you explicitly execute it.
+
+Place avatar and preview files in Laravel's seed-assets directory. The seeder searches by basename and accepts `.jpg`, `.jpeg`, `.png`, and `.webp`, so the exact extension can vary:
+
+```text
+database/seed-assets/
+  avatar (1).jpg
+  avatar (2).jpg
+  ...
+  avatar (8).jpg
+  prew (1).jpg
+  ...
+  prew (9).jpg
+```
+
+For Docker, the Compose files mount the host directory below into the backend container as `/var/www/html/database/seed-assets`:
+
+```text
+./seed-assets -> /var/www/html/database/seed-assets:ro
+```
+
+Do not commit real image assets to the repository. Copy them to `./seed-assets` on the host/VPS before running the seeder.
+
+The seeder creates or updates these test accounts:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| user | `Piskunova@gmail.com` | `Parol2345!` |
+| admin | `AdminPisk@gmail.com` | `Parol2345!` |
+| moderator | `ModeratorPisk@gmail.com` | `Parol2345!` |
+
+It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing, the seeder prints a warning, still creates/updates the users, and skips unavailable media.
+
+Local run from the repository root:
+
+```bash
+cd backend
+php artisan storage:link
+php artisan db:seed --class=DemoUsersAndMediaSeeder --force
+```
+
+VPS run with the production Compose file:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan storage:link
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan db:seed --class=DemoUsersAndMediaSeeder --force
+```
+
+The seeder is idempotent: repeat runs update the same three users and stable demo publication slugs, overwrite only files under `demo-media/` in the public storage disk, and remove/recreate only its own demo media attachments for those demo publications.
