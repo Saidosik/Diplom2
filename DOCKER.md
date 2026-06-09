@@ -141,7 +141,7 @@ The seeder creates or updates these test accounts:
 | admin | `AdminPisk@gmail.com` | `Parol2345!` |
 | moderator | `ModeratorPisk@gmail.com` | `Parol2345!` |
 
-It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing inside the container, the seeder prints a warning, still creates/updates the users, and skips unavailable media. Because the search is recursive, the current VPS layout `seed-assets/avatars/avatar (1).jpg` and `seed-assets/photos/prew (1).jpg` is valid.
+It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing, the seeder prints a warning, still creates/updates the users, and skips unavailable media.
 
 Local run from the repository root:
 
