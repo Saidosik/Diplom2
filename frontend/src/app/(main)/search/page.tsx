@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { AiSearchPanel } from "@/features/search/components/ai-search-panel"
+import { TagBadge } from "@/features/tags/components/tag-badge"
 
 const filters: Array<{ label: string; value: SearchFilterType }> = [
     { label: "Все", value: "all" },
@@ -317,9 +318,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
                 {typeof meta.language === "string" ? <span>{meta.language}</span> : null}
                 {typeof meta.reputation_score === "number" ? <span>{meta.reputation_score} репутации</span> : null}
                 {result.tags?.slice(0, 5).map((tag) => (
-                    <Badge key={tag.id} asChild variant="outline">
-                        <Link href={`/tags/${tag.slug}`}>#{tag.name}</Link>
-                    </Badge>
+                    <TagBadge key={tag.id} tag={tag} compact />
                 ))}
             </CardContent>
         </Card>
