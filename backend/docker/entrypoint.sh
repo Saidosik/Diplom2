@@ -6,7 +6,12 @@ mkdir -p \
   storage/framework/sessions \
   storage/framework/views \
   storage/logs \
+  storage/app/public \
   bootstrap/cache
+
+if [ ! -e public/storage ]; then
+  php artisan storage:link --no-interaction || true
+fi
 
 # Do not run migrations automatically. Use:
 # docker compose exec backend php artisan migrate

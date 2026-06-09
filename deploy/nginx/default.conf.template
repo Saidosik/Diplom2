@@ -56,6 +56,21 @@ server {
         add_header X-Accel-Buffering no always;
     }
 
+    # Public Laravel storage files (avatars, demo media, uploaded public assets).
+    # The files live behind backend/public/storage -> storage/app/public, so proxy
+    # /storage/* to Laravel instead of letting Next.js handle these URLs.
+    location /storage/ {
+        proxy_pass http://backend:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
     # Keep Laravel API private: browser requests are served by Next.js BFF routes only.
     location / {
         proxy_pass http://frontend:3000;
