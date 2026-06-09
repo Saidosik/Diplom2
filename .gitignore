@@ -18,3 +18,7 @@ deploy/certbot/logs/
 
 # OS/editor noise
 .DS_Store
+
+# Local demo media assets (mounted into backend/database/seed-assets for seeding)
+seed-assets/
+backend/database/seed-assets/
