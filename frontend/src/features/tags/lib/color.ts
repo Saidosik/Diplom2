@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react"
+import { colorToHex, getThemeColorFallback, type ThemeName, type ThemeSurface } from "@/features/tags/lib/theme-colors"
 
-export const FALLBACK_TAG_COLOR = "#38bdf8"
+export const FALLBACK_TAG_COLOR = getThemeColorFallback("light", "primary")
 
 export type ReadabilityStatus = "good" | "acceptable" | "poor"
 
@@ -10,14 +11,12 @@ export type ReadabilityResult = {
     label: string
 }
 
+export function isValidHexColor(color?: string | null) {
+    return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color?.trim() ?? "")
+}
+
 export function normalizeHexColor(color?: string | null) {
-    const value = color?.trim() ?? ""
-    if (/^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase()
-    if (/^#[0-9a-f]{3}$/i.test(value)) {
-        const [, r, g, b] = value
-        return `#${r}${r}${g}${g}${b}${b}`.toLowerCase()
-    }
-    return FALLBACK_TAG_COLOR
+    return colorToHex(color) ?? FALLBACK_TAG_COLOR
 }
 
 function hexToRgb(hex: string) {
@@ -27,6 +26,21 @@ function hexToRgb(hex: string) {
         g: Number.parseInt(normalized.slice(2, 4), 16),
         b: Number.parseInt(normalized.slice(4, 6), 16),
     }
+}
+
+function rgbToHex(value: number) {
+    return Math.round(Math.min(255, Math.max(0, value))).toString(16).padStart(2, "0")
+}
+
+function withAlpha(color: string, alpha: number) {
+    const { r, g, b } = hexToRgb(color)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function blend(foreground: string, background: string, alpha: number) {
+    const fg = hexToRgb(foreground)
+    const bg = hexToRgb(background)
+    return `#${rgbToHex((fg.r * alpha) + (bg.r * (1 - alpha)))}${rgbToHex((fg.g * alpha) + (bg.g * (1 - alpha)))}${rgbToHex((fg.b * alpha) + (bg.b * (1 - alpha)))}`
 }
 
 function channelToLinear(value: number) {
@@ -54,43 +68,50 @@ export function readabilityStatus(ratio: number): ReadabilityStatus {
 }
 
 export function readabilityLabel(status: ReadabilityStatus) {
-    if (status === "good") return "Хорошо читается"
-    if (status === "acceptable") return "Допустимо"
-    return "Плохо читается"
+    if (status === "good") return "Контраст: хороший"
+    if (status === "acceptable") return "Контраст: допустимый"
+    return "Контраст: низкий"
 }
 
-export function calculateReadability(color?: string | null) {
+export function calculateReadability(color?: string | null, background?: string | null) {
     const normalized = normalizeHexColor(color)
-    const lightRatio = contrastRatio(normalized, "#ffffff")
-    const darkRatio = contrastRatio(normalized, "#0f172a")
-    const lightStatus = readabilityStatus(lightRatio)
-    const darkStatus = readabilityStatus(darkRatio)
+    const surfaceBackground = normalizeHexColor(background ?? getThemeColorFallback("light", "background"))
+    const ratio = contrastRatio(normalized, surfaceBackground)
+    const status = readabilityStatus(ratio)
 
     return {
         color: normalized,
-        light: { ratio: lightRatio, status: lightStatus, label: readabilityLabel(lightStatus) },
-        dark: { ratio: darkRatio, status: darkStatus, label: readabilityLabel(darkStatus) },
+        background: surfaceBackground,
+        ratio,
+        status,
+        label: readabilityLabel(status),
     }
 }
 
-function alphaHex(color: string, alpha: string) {
-    return `${normalizeHexColor(color)}${alpha}`
+export function calculateSurfaceReadability(color: string | null | undefined, surface: ThemeSurface) {
+    return calculateReadability(color, surface.background)
 }
 
-export function getTagBadgeStyle(color?: string | null, theme: "light" | "dark" = "dark"): CSSProperties {
+export function getRepresentativeSurface(surfaces: ThemeSurface[], theme: ThemeName = "dark") {
+    return surfaces.find((surface) => surface.theme === theme && surface.backgroundToken === "card")
+        ?? surfaces.find((surface) => surface.theme === theme)
+}
+
+export function getTagBadgeStyle(color?: string | null, surface?: Pick<ThemeSurface, "background" | "foreground"> | null): CSSProperties {
     const normalized = normalizeHexColor(color)
-    const background = theme === "dark" ? "#0f172a" : "#ffffff"
-    const textCandidates = theme === "dark" ? ["#f8fafc", normalized, "#111827"] : ["#111827", normalized, "#f8fafc"]
+    const background = normalizeHexColor(surface?.background ?? getThemeColorFallback("dark", "card"))
+    const surfaceForeground = normalizeHexColor(surface?.foreground ?? getThemeColorFallback("dark", "card-foreground"))
+    const alpha = contrastRatio(normalized, background) >= 3 ? 0.16 : 0.10
+    const badgeBackground = blend(normalized, background, alpha)
+    const textCandidates = [surfaceForeground, normalized, background]
     const textColor = textCandidates
-        .map((candidate) => ({ candidate, ratio: contrastRatio(candidate, background) }))
-        .sort((a, b) => b.ratio - a.ratio)[0]?.candidate ?? (theme === "dark" ? "#f8fafc" : "#111827")
-    const accentContrast = contrastRatio(normalized, background)
-    const safeAccent = accentContrast < 3 && theme === "dark" ? "#f8fafc" : normalized
+        .map((candidate) => ({ candidate, ratio: contrastRatio(candidate, badgeBackground) }))
+        .sort((a, b) => b.ratio - a.ratio)[0]?.candidate ?? surfaceForeground
 
     return {
         color: textColor,
-        borderColor: alphaHex(safeAccent, theme === "dark" ? "99" : "80"),
-        backgroundColor: alphaHex(normalized, theme === "dark" ? "2e" : "1f"),
-        boxShadow: theme === "dark" ? `inset 0 0 0 1px ${alphaHex(safeAccent, "24")}` : undefined,
+        borderColor: withAlpha(normalized, 0.58),
+        backgroundColor: withAlpha(normalized, alpha),
+        boxShadow: `inset 0 0 0 1px ${withAlpha(normalized, 0.14)}`,
     }
 }

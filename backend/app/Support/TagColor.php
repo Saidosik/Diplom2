@@ -34,8 +34,9 @@ class TagColor
     public static function readability(?string $color): array
     {
         $normalized = self::normalize($color);
+        // Mirrors globals.css design tokens: --background in :root and .dark.
         $lightRatio = self::contrastRatio($normalized, '#ffffff');
-        $darkRatio = self::contrastRatio($normalized, '#0f172a');
+        $darkRatio = self::contrastRatio($normalized, '#0a0a0a');
 
         return [
             'light' => [

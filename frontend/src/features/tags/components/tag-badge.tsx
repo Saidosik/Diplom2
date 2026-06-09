@@ -1,7 +1,10 @@
+"use client"
+
 import Link from "next/link"
 
 import { cn } from "@/lib/utils"
-import { getTagBadgeStyle } from "@/features/tags/lib/color"
+import { getRepresentativeSurface, getTagBadgeStyle } from "@/features/tags/lib/color"
+import { type ThemeSurface, useCurrentThemeName, useReadableThemeColors } from "@/features/tags/lib/theme-colors"
 
 export type TagBadgeData = {
     id?: number | string
@@ -15,9 +18,14 @@ type TagBadgeProps = {
     className?: string
     showHash?: boolean
     compact?: boolean
+    surface?: Pick<ThemeSurface, "background" | "foreground">
 }
 
-export function TagBadge({ tag, className, showHash = true, compact = false }: TagBadgeProps) {
+export function TagBadge({ tag, className, showHash = true, compact = false, surface }: TagBadgeProps) {
+    const surfaces = useReadableThemeColors()
+    const currentTheme = useCurrentThemeName()
+    const effectiveSurface = surface ?? getRepresentativeSurface(surfaces, currentTheme)
+
     return (
         <Link
             href={`/tags/${tag.slug}`}
@@ -26,7 +34,7 @@ export function TagBadge({ tag, className, showHash = true, compact = false }: T
                 compact ? "px-2 py-1 text-[11px]" : "px-2.5 py-1.5 text-xs",
                 className,
             )}
-            style={getTagBadgeStyle(tag.color)}
+            style={getTagBadgeStyle(tag.color, effectiveSurface)}
         >
             <span className="truncate">{showHash ? `#${tag.name}` : tag.name}</span>
         </Link>
