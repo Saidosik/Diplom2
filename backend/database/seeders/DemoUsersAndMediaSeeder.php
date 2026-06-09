@@ -93,7 +93,7 @@ class DemoUsersAndMediaSeeder extends Seeder
             $previewFiles = $this->availablePreviewFiles();
 
             if ($previewFiles === []) {
-                $this->warnOnce('preview-assets', 'Demo preview images were not found in database/seed-assets. If you run through Docker Compose, put files in the host ./seed-assets directory so it is mounted to /var/www/html/database/seed-assets. Demo publications will be created without cover images, image blocks and media attachments.');
+                $this->warnOnce('preview-assets', 'Demo preview images were not found. Demo publications will be created without cover images, image blocks and media attachments.');
             }
 
             $this->seedPublications($users, $previewFiles);
@@ -261,7 +261,7 @@ class DemoUsersAndMediaSeeder extends Seeder
         }
 
         if ($files === []) {
-            $this->warnOnce('avatar-assets', 'Demo avatar images were not found in database/seed-assets. If you run through Docker Compose, put files in the host ./seed-assets directory so it is mounted to /var/www/html/database/seed-assets. Users will be created without demo avatars.');
+            $this->warnOnce('avatar-assets', 'Demo avatar images were not found. Users will be created without demo avatars.');
 
             return null;
         }

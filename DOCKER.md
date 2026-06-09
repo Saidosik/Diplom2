@@ -111,19 +111,10 @@ database/seed-assets/
   prew (9).jpg
 ```
 
-For Docker, keep the assets on the host next to `docker-compose.yml` / `docker-compose.prod.yml`. The Compose files mount that host directory into the Laravel container path that the seeder reads:
+For Docker, the Compose files mount the host directory below into the backend container as `/var/www/html/database/seed-assets`:
 
 ```text
-/root/Diplom2/seed-assets -> /var/www/html/database/seed-assets:ro
-```
-
-Do **not** move the folder to `/root/Diplom2/backend/database/seed-assets` when running through Docker Compose: that path is inside the source tree on the host, but the backend container reads the bind mount from `./seed-assets`. If you already moved it there, copy the files back to the Compose-level folder:
-
-```bash
-cd /root/Diplom2
-mkdir -p seed-assets
-cp -a backend/database/seed-assets/. seed-assets/
-docker compose -f docker-compose.prod.yml --env-file .env.production exec backend sh -lc 'find database/seed-assets -maxdepth 1 -type f | sort | head'
+./seed-assets -> /var/www/html/database/seed-assets:ro
 ```
 
 Do not commit real image assets to the repository. Copy them to `./seed-assets` on the host/VPS before running the seeder.
@@ -136,7 +127,7 @@ The seeder creates or updates these test accounts:
 | admin | `AdminPisk@gmail.com` | `Parol2345!` |
 | moderator | `ModeratorPisk@gmail.com` | `Parol2345!` |
 
-It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing inside the container, the seeder prints a warning, still creates/updates the users, and skips unavailable media.
+It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing, the seeder prints a warning, still creates/updates the users, and skips unavailable media.
 
 Local run from the repository root:
 
