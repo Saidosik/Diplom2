@@ -93,7 +93,7 @@ class DemoUsersAndMediaSeeder extends Seeder
             $previewFiles = $this->availablePreviewFiles();
 
             if ($previewFiles === []) {
-                $this->warnOnce('preview-assets', 'Demo preview images were not found. Demo publications will be created without cover images, image blocks and media attachments.');
+                $this->warnOnce('preview-assets', 'Demo preview images were not found in database/seed-assets or its subdirectories. If you run through Docker Compose, put files in the host ./seed-assets directory so it is mounted to /var/www/html/database/seed-assets. Demo publications will be created without cover images, image blocks and media attachments.');
             }
 
             $this->seedPublications($users, $previewFiles);
@@ -261,7 +261,7 @@ class DemoUsersAndMediaSeeder extends Seeder
         }
 
         if ($files === []) {
-            $this->warnOnce('avatar-assets', 'Demo avatar images were not found. Users will be created without demo avatars.');
+            $this->warnOnce('avatar-assets', 'Demo avatar images were not found in database/seed-assets or its subdirectories. If you run through Docker Compose, put files in the host ./seed-assets directory so it is mounted to /var/www/html/database/seed-assets. Users will be created without demo avatars.');
 
             return null;
         }
@@ -294,24 +294,38 @@ class DemoUsersAndMediaSeeder extends Seeder
             return null;
         }
 
-        $entries = scandir($directory);
-        if ($entries === false) {
-            $this->warnOnce('seed-assets-readable', "Seed assets directory is not readable: {$directory}. Demo users will still be created; media files will be skipped.");
+        $directories = [$directory];
 
-            return null;
-        }
+        while ($currentDirectory = array_shift($directories)) {
+            $entries = scandir($currentDirectory);
+            if ($entries === false) {
+                $this->warnOnce('seed-assets-readable-' . $currentDirectory, "Seed assets directory is not readable: {$currentDirectory}. Demo users will still be created; unreadable media files will be skipped.");
 
-        foreach ($entries as $entry) {
-            $path = $directory . DIRECTORY_SEPARATOR . $entry;
-            if (! is_file($path)) {
                 continue;
             }
 
-            $extension = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
-            $filename = pathinfo($entry, PATHINFO_FILENAME);
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
 
-            if ($filename === $basename && in_array($extension, self::IMAGE_EXTENSIONS, true)) {
-                return $path;
+                $path = $currentDirectory . DIRECTORY_SEPARATOR . $entry;
+
+                if (is_dir($path)) {
+                    $directories[] = $path;
+                    continue;
+                }
+
+                if (! is_file($path)) {
+                    continue;
+                }
+
+                $extension = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
+                $filename = pathinfo($entry, PATHINFO_FILENAME);
+
+                if ($filename === $basename && in_array($extension, self::IMAGE_EXTENSIONS, true)) {
+                    return $path;
+                }
             }
         }
 

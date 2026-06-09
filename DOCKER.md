@@ -102,19 +102,33 @@ Place avatar and preview files in Laravel's seed-assets directory. The seeder se
 
 ```text
 database/seed-assets/
-  avatar (1).jpg
-  avatar (2).jpg
-  ...
-  avatar (8).jpg
-  prew (1).jpg
-  ...
-  prew (9).jpg
+  avatars/
+    avatar (1).jpg
+    avatar (2).jpg
+    ...
+    avatar (8).jpg
+  photos/
+    prew (1).jpg
+    prew (2).png
+    ...
+    prew (9).jpg
 ```
 
-For Docker, the Compose files mount the host directory below into the backend container as `/var/www/html/database/seed-assets`:
+A flat layout also works; the seeder searches `database/seed-assets` recursively, so files may be directly in `seed-assets/` or grouped under folders such as `avatars/` and `photos/`.
+
+For Docker, keep the assets on the host next to `docker-compose.yml` / `docker-compose.prod.yml`. The Compose files mount that host directory into the Laravel container path that the seeder reads:
 
 ```text
-./seed-assets -> /var/www/html/database/seed-assets:ro
+/root/Diplom2/seed-assets -> /var/www/html/database/seed-assets:ro
+```
+
+Do **not** move the folder to `/root/Diplom2/backend/database/seed-assets` when running through Docker Compose: that path is inside the source tree on the host, but the backend container reads the bind mount from `./seed-assets`. If you already moved it there, copy the files back to the Compose-level folder:
+
+```bash
+cd /root/Diplom2
+mkdir -p seed-assets
+cp -a backend/database/seed-assets/. seed-assets/
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend sh -lc 'find database/seed-assets -maxdepth 2 -type f | sort | head'
 ```
 
 Do not commit real image assets to the repository. Copy them to `./seed-assets` on the host/VPS before running the seeder.
