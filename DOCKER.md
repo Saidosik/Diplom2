@@ -141,7 +141,7 @@ The seeder creates or updates these test accounts:
 | admin | `AdminPisk@gmail.com` | `Parol2345!` |
 | moderator | `ModeratorPisk@gmail.com` | `Parol2345!` |
 
-It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing, the seeder prints a warning, still creates/updates the users, and skips unavailable media.
+It stores avatars in the existing `users.avatar` field and uses publication `cover_image_path`, image blocks, `user_files`, and `content_attachments` for demo preview photos. If `database/seed-assets` or individual files are missing inside the container, the seeder prints a warning, still creates/updates the users, and skips unavailable media. Because the search is recursive, the current VPS layout `seed-assets/avatars/avatar (1).jpg` and `seed-assets/photos/prew (1).jpg` is valid.
 
 Local run from the repository root:
 
@@ -159,3 +159,14 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec backen
 ```
 
 The seeder is idempotent: repeat runs update the same three users and stable demo publication slugs, overwrite only files under `demo-media/` in the public storage disk, and remove/recreate only its own demo media attachments for those demo publications.
+
+### Public storage URLs in production
+
+Seeder media URLs look like `/storage/demo-media/...` (or an absolute URL based on `APP_URL`) because Laravel's public disk exposes files through the `public/storage` symlink. In production, the reverse proxy forwards `/storage/*` to the backend container so Next.js does not return a 404 for avatars and publication previews.
+
+After pulling changes that affect `deploy/nginx/default.conf.template` or `backend/docker/entrypoint.sh`, recreate the affected containers so the proxy rule and storage symlink are active:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build backend reverse-proxy
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend php artisan storage:link
+```
