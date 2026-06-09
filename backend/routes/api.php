@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminLogController;
+use App\Http\Controllers\Api\Admin\AdminTagController;
 use App\Http\Controllers\Api\Ai\AiAssistantController;
 use App\Http\Controllers\Api\Ai\RagController;
 use App\Http\Controllers\Api\Interaction\CommentController;
@@ -229,6 +230,12 @@ Route::middleware('jwt')->group(function () {
             Route::delete('/ai/index/documents/{document}', [AdminAiIndexController::class, 'destroyDocument']);
             Route::post('/ai/reindex', [AdminAiIndexController::class, 'rebuild']);
         });
+
+        Route::get('/tags', [AdminTagController::class, 'index']);
+        Route::get('/tags/stats', [AdminTagController::class, 'stats']);
+        Route::post('/tags', [AdminTagController::class, 'store']);
+        Route::match(['put', 'patch'], '/tags/{tag}', [AdminTagController::class, 'update']);
+        Route::delete('/tags/{tag}', [AdminTagController::class, 'destroy']);
 
         Route::get('/reports', [AdminReportController::class, 'index']);
         Route::get('/reports/{report}', [AdminReportController::class, 'show']);
