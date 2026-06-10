@@ -79,6 +79,44 @@ class AdminTagsTest extends TestCase
         $this->assertDatabaseHas('tags', ['id' => $tag->id]);
     }
 
+
+    public function test_tagged_materials_coverage_counts_unique_materials(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $firstTag = Tag::query()->create(['name' => 'First', 'slug' => 'first', 'color' => '#008236', 'status' => 'active']);
+        $secondTag = Tag::query()->create(['name' => 'Second', 'slug' => 'second', 'color' => '#0ea5e9', 'status' => 'active']);
+        $publication = Publication::query()->create([
+            'author_id' => $admin->id,
+            'type' => PublicationType::Article->value,
+            'title' => 'Tagged article',
+            'slug' => 'tagged-article',
+            'status' => PublicationStatus::Published->value,
+        ]);
+        Publication::query()->create([
+            'author_id' => $admin->id,
+            'type' => PublicationType::Article->value,
+            'title' => 'Untagged article',
+            'slug' => 'untagged-article',
+            'status' => PublicationStatus::Published->value,
+        ]);
+        $question = IssueQuestion::query()->create([
+            'author_id' => $admin->id,
+            'title' => 'Tagged question',
+            'slug' => 'tagged-question',
+            'status' => IssueQuestionStatus::Published->value,
+        ]);
+
+        $publication->tags()->attach([$firstTag->id, $secondTag->id]);
+        $question->tags()->attach($firstTag->id);
+
+        $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/admin/tags')
+            ->assertOk()
+            ->assertJsonPath('stats.totals.materials_total', 3)
+            ->assertJsonPath('stats.totals.tagged_materials_total', 2)
+            ->assertJsonPath('stats.totals.tagged_materials_percent', 66.7);
+    }
+
     private function withTokenFor(string $role): self
     {
         $user = User::factory()->create(['role' => $role]);

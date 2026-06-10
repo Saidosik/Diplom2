@@ -211,8 +211,8 @@ class AdminTagController extends Controller
                 'avg_light_contrast' => $count > 0 ? round($tags->avg('readability_light.ratio'), 2) : 0,
                 'avg_dark_contrast' => $count > 0 ? round($tags->avg('readability_dark.ratio'), 2) : 0,
                 'materials_total' => $totals['materials'],
-                'tagged_materials_total' => $tags->sum('total_usage_count'),
-                'tagged_materials_percent' => $totals['materials'] > 0 ? round(($tags->sum('total_usage_count') / $totals['materials']) * 100, 1) : 0,
+                'tagged_materials_total' => $totals['tagged_materials'],
+                'tagged_materials_percent' => $totals['materials'] > 0 ? min(100, round(($totals['tagged_materials'] / $totals['materials']) * 100, 1)) : 0,
             ],
             'top_publications' => $tags->sortByDesc('posts_count')->take(10)->values(),
             'top_questions' => $tags->sortByDesc('questions_count')->take(10)->values(),
@@ -237,8 +237,23 @@ class AdminTagController extends Controller
     {
         $publications = Publication::query()->where('status', PublicationStatus::Published->value)->count();
         $questions = IssueQuestion::query()->where('status', IssueQuestionStatus::Published->value)->count();
+        $taggedPublications = Publication::query()
+            ->where('status', PublicationStatus::Published->value)
+            ->whereHas('tags')
+            ->distinct('publications.id')
+            ->count('publications.id');
+        $taggedQuestions = IssueQuestion::query()
+            ->where('status', IssueQuestionStatus::Published->value)
+            ->whereHas('tags')
+            ->distinct('issue_questions.id')
+            ->count('issue_questions.id');
 
-        return ['publications' => $publications, 'questions' => $questions, 'materials' => $publications + $questions];
+        return [
+            'publications' => $publications,
+            'questions' => $questions,
+            'materials' => $publications + $questions,
+            'tagged_materials' => $taggedPublications + $taggedQuestions,
+        ];
     }
 
     private function worstReadability(array $tag): string

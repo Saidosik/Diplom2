@@ -231,33 +231,35 @@ function TagFormDialog({ open, tag, pending, surfaces, onOpenChange, onSubmit }:
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[90dvh] overflow-hidden p-0 sm:max-w-4xl">
+                <DialogHeader className="shrink-0 border-b px-6 py-5">
                     <DialogTitle>{tag ? "Редактировать тег" : "Создать тег"}</DialogTitle>
                     <DialogDescription>Выберите цвет, проверьте контраст на светлой и тёмной теме и сохраните тег.</DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-                    <div className="space-y-4">
-                        <Field label="Название"><Input value={form.name} onChange={(event) => updateName(event.target.value)} placeholder="Laravel" /></Field>
-                        <Field label="Slug"><div className="flex gap-2"><Input value={form.slug} onChange={(event) => { setAutoSlug(false); setForm({ ...form, slug: event.target.value }) }} placeholder="laravel" /><Button type="button" variant="outline" onClick={() => { setAutoSlug(true); setForm({ ...form, slug: slugify(form.name) }) }}>Авто</Button></div></Field>
-                        <Field label="Описание"><Textarea value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Краткое описание тега" /></Field>
-                        <TagColorPicker value={form.color} onChange={updateColor} isValid={hexIsValid} />
-                        <div className="flex items-center gap-3"><Switch checked={form.is_active} onCheckedChange={(checked) => setForm({ ...form, is_active: checked })} /><Label>Тег активен</Label></div>
-                    </div>
-                    <div className="space-y-4">
-                        <Card>
-                            <CardHeader className="pb-3"><CardTitle className="text-base">Проверка читаемости</CardTitle><CardDescription>Фоны берутся из CSS variables текущей темы проекта.</CardDescription></CardHeader>
-                            <CardContent className="grid gap-3">
-                                {surfaceReadability.map(({ surface, readability }) => (
-                                    <SurfaceReadabilityPreview key={surface.id} surface={surface} color={form.color} tagName={form.name || "Пример"} readability={readability} />
-                                ))}
-                            </CardContent>
-                        </Card>
-                        {!hexIsValid ? <Alert variant="destructive"><AlertTitle>Некорректный HEX</AlertTitle><AlertDescription>Используйте формат #RGB или #RRGGBB, например {FALLBACK_TAG_COLOR}.</AlertDescription></Alert> : null}
-                        {hexIsValid && lowContrastThemes.length > 0 ? <Alert><AlertTitle>Рекомендация по контрасту</AlertTitle><AlertDescription>{lowContrastThemes.join(". ")}. Цвет можно использовать, но для лучшей читаемости рекомендуется выбрать более контрастный оттенок.</AlertDescription></Alert> : null}
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+                        <div className="space-y-4">
+                            <Field label="Название"><Input value={form.name} onChange={(event) => updateName(event.target.value)} placeholder="Laravel" /></Field>
+                            <Field label="Slug"><div className="flex gap-2"><Input value={form.slug} onChange={(event) => { setAutoSlug(false); setForm({ ...form, slug: event.target.value }) }} placeholder="laravel" /><Button type="button" variant="outline" onClick={() => { setAutoSlug(true); setForm({ ...form, slug: slugify(form.name) }) }}>Авто</Button></div></Field>
+                            <Field label="Описание"><Textarea value={form.description ?? ""} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Краткое описание тега" /></Field>
+                            <TagColorPicker value={form.color} onChange={updateColor} isValid={hexIsValid} />
+                            <div className="flex items-center gap-3"><Switch checked={form.is_active} onCheckedChange={(checked) => setForm({ ...form, is_active: checked })} /><Label>Тег активен</Label></div>
+                        </div>
+                        <div className="space-y-4">
+                            <Card>
+                                <CardHeader className="pb-3"><CardTitle className="text-base">Проверка читаемости</CardTitle><CardDescription>Фоны берутся из CSS variables текущей темы проекта.</CardDescription></CardHeader>
+                                <CardContent className="grid gap-3">
+                                    {surfaceReadability.map(({ surface, readability }) => (
+                                        <SurfaceReadabilityPreview key={surface.id} surface={surface} color={form.color} tagName={form.name || "Пример"} readability={readability} />
+                                    ))}
+                                </CardContent>
+                            </Card>
+                            {!hexIsValid ? <Alert variant="destructive"><AlertTitle>Некорректный HEX</AlertTitle><AlertDescription>Используйте формат #RGB или #RRGGBB, например {FALLBACK_TAG_COLOR}.</AlertDescription></Alert> : null}
+                            {hexIsValid && lowContrastThemes.length > 0 ? <Alert><AlertTitle>Рекомендация по контрасту</AlertTitle><AlertDescription>{lowContrastThemes.join(". ")}. Цвет можно использовать, но для лучшей читаемости рекомендуется выбрать более контрастный оттенок.</AlertDescription></Alert> : null}
+                        </div>
                     </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="shrink-0 border-t px-6 py-4">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
                     <Button disabled={pending || !form.name || !hexIsValid} onClick={submit}>{pending ? "Сохранение..." : "Сохранить"}</Button>
                 </DialogFooter>
@@ -278,7 +280,7 @@ function TagColorPicker({ value, onChange, isValid }: { value?: string | null; o
                     <Input value={value ?? ""} onChange={(event) => onChange(event.target.value)} placeholder={FALLBACK_TAG_COLOR} className={cn("max-w-36 font-mono", !isValid && "border-destructive focus-visible:ring-destructive/30")} />
                     <Popover>
                         <PopoverTrigger asChild><Button type="button" variant="outline">Пресеты</Button></PopoverTrigger>
-                        <PopoverContent align="start" className="w-80">
+                        <PopoverContent align="start" className="w-[min(20rem,calc(100vw-2rem))]">
                             <div className="space-y-3">
                                 <div><p className="font-medium">Готовые цвета</p><p className="text-xs text-muted-foreground">Нажмите на цвет, чтобы применить его к тегу.</p></div>
                                 <div className="grid grid-cols-2 gap-2">

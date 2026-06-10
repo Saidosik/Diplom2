@@ -24,6 +24,7 @@ import {
     SidebarRail,
     SidebarSeparator,
     SidebarTrigger,
+    useSidebar,
 } from "@/components/ui/sidebar"
 
 const mainItems = [
@@ -55,22 +56,44 @@ function roleLabel(user: User) {
     return "Сотрудник"
 }
 
-export function AdminShell({ user, children }: AdminShellProps) {
+function AdminNavLink({ item }: { item: { title: string; href: string; icon: React.ElementType } }) {
     const pathname = usePathname()
-    const canManageSystem = isAdmin(user)
+    const { setOpenMobile } = useSidebar()
+    const Icon = item.icon
+    const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
 
     return (
-        <SidebarProvider>
-            <Sidebar collapsible="icon" variant="inset">
-                <SidebarHeader className="p-2">
-                    <SidebarMenu>
+        <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className="h-10">
+                <Link href={item.href} onClick={() => setOpenMobile(false)}>
+                    <Icon />
+                    <span className="truncate">{item.title}</span>
+                </Link>
+            </SidebarMenuButton>
+        </SidebarMenuItem>
+    )
+}
+
+function AdminSidebar({ user, canManageSystem }: { user: User; canManageSystem: boolean }) {
+    const { setOpenMobile } = useSidebar()
+
+    return (
+        <Sidebar collapsible="icon" variant="sidebar">
+            <SidebarHeader>
+                <div className="flex h-full min-w-0 items-center gap-2">
+                    <SidebarMenu className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                         <SidebarMenuItem>
-                            <SidebarMenuButton asChild size="lg" tooltip="Админ-панель">
-                                <Link href="/admin" className="gap-3">
-                                    <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                            <SidebarMenuButton
+                                asChild
+                                size="lg"
+                                tooltip="Админ-панель"
+                                className="h-11 px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                            >
+                                <Link href="/admin" className="gap-3" onClick={() => setOpenMobile(false)}>
+                                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                                         <ShieldCheck className="size-4" />
                                     </span>
-                                    <span className="grid flex-1 text-left leading-tight">
+                                    <span className="grid min-w-0 flex-1 text-left leading-tight">
                                         <span className="truncate font-semibold">Админ-панель</span>
                                         <span className="truncate text-xs text-sidebar-foreground/70">Вектор</span>
                                     </span>
@@ -78,96 +101,76 @@ export function AdminShell({ user, children }: AdminShellProps) {
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     </SidebarMenu>
-                </SidebarHeader>
+                    <SidebarTrigger className="ml-auto size-9 shrink-0 group-data-[collapsible=icon]:mx-auto" />
+                </div>
+            </SidebarHeader>
 
-                <SidebarSeparator />
+            <SidebarContent>
+                <SidebarGroup>
+                    <SidebarGroupLabel>Управление</SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {mainItems.map((item) => <AdminNavLink key={item.href} item={item} />)}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
 
-                <SidebarContent>
+                {canManageSystem ? (
                     <SidebarGroup>
-                        <SidebarGroupLabel>Модерация</SidebarGroupLabel>
+                        <SidebarGroupLabel>Система</SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                {mainItems.map((item) => {
-                                    const Icon = item.icon
-                                    const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
-
-                                    return (
-                                        <SidebarMenuItem key={item.href}>
-                                            <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                                                <Link href={item.href}>
-                                                    <Icon />
-                                                    <span>{item.title}</span>
-                                                </Link>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )
-                                })}
+                                {systemItems.map((item) => <AdminNavLink key={item.href} item={item} />)}
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
+                ) : null}
+            </SidebarContent>
 
-                    {canManageSystem ? (
-                        <SidebarGroup>
-                            <SidebarGroupLabel>Система</SidebarGroupLabel>
-                            <SidebarGroupContent>
-                                <SidebarMenu>
-                                    {systemItems.map((item) => {
-                                        const Icon = item.icon
-                                        const isActive = pathname === item.href || pathname.startsWith(item.href)
+            <SidebarSeparator />
 
-                                        return (
-                                            <SidebarMenuItem key={item.href}>
-                                                <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-                                                    <Link href={item.href}>
-                                                        <Icon />
-                                                        <span>{item.title}</span>
-                                                    </Link>
-                                                </SidebarMenuButton>
-                                            </SidebarMenuItem>
-                                        )
-                                    })}
-                                </SidebarMenu>
-                            </SidebarGroupContent>
-                        </SidebarGroup>
-                    ) : null}
-                </SidebarContent>
+            <SidebarFooter>
+                <div className="px-2 pb-1 group-data-[collapsible=icon]:hidden">
+                    <Badge variant={canManageSystem ? "default" : "secondary"} className="max-w-full truncate">{roleLabel(user)}</Badge>
+                </div>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="На сайт" className="h-10">
+                            <Link href="/" onClick={() => setOpenMobile(false)}>
+                                <Home />
+                                <span>На сайт</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+                <SidebarUser user={user} />
+            </SidebarFooter>
 
-                <SidebarSeparator />
+            <SidebarRail />
+        </Sidebar>
+    )
+}
 
-                <SidebarFooter className="p-2">
-                    <div className="px-2 pb-1 group-data-[collapsible=icon]:hidden">
-                        <Badge variant={canManageSystem ? "default" : "secondary"}>{roleLabel(user)}</Badge>
-                    </div>
-                    <SidebarMenu>
-                        <SidebarMenuItem>
-                            <SidebarMenuButton asChild tooltip="На сайт">
-                                <Link href="/">
-                                    <Home />
-                                    <span>На сайт</span>
-                                </Link>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    </SidebarMenu>
-                    <SidebarUser user={user} />
-                </SidebarFooter>
+export function AdminShell({ user, children }: AdminShellProps) {
+    const canManageSystem = isAdmin(user)
 
-                <SidebarRail />
-            </Sidebar>
+    return (
+        <SidebarProvider>
+            <AdminSidebar user={user} canManageSystem={canManageSystem} />
+            <SidebarInset className="min-w-0 flex-1">
+                    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:px-6">
+                        <SidebarTrigger className="size-9" />
+                        <Separator orientation="vertical" className="hidden h-5 sm:block" />
+                        <SiteBrand href="/admin" size="sm" nameClassName="hidden text-sm sm:inline" />
+                        <div className="ml-auto flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                            <span className="hidden max-w-48 truncate md:inline">{user.name}</span>
+                            <Badge variant={canManageSystem ? "default" : "secondary"} className="shrink-0">{roleLabel(user)}</Badge>
+                        </div>
+                    </header>
 
-            <SidebarInset>
-                <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur md:px-6">
-                    <SidebarTrigger />
-                    <Separator orientation="vertical" className="h-5" />
-                    <SiteBrand href="/admin" size="sm" nameClassName="text-sm" />
-                    <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="hidden sm:inline">{user.name}</span>
-                        <Badge variant={canManageSystem ? "default" : "secondary"}>{roleLabel(user)}</Badge>
-                    </div>
-                </header>
-
-                <main className="flex-1 overflow-auto px-4 py-6 md:px-6 xl:px-8">
-                    {children}
-                </main>
+                    <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-5 sm:px-4 md:px-6 md:py-6 xl:px-8">
+                        {children}
+                    </main>
             </SidebarInset>
         </SidebarProvider>
     )
