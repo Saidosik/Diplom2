@@ -35,6 +35,7 @@ const mainItems = [
     { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
     { title: "AI индекс", href: "/admin/ai", icon: Database },
+    { title: "Правовые документы", href: "/admin/legal/privacy-policy", icon: ScrollText, adminOnly: true },
 ]
 
 const systemItems = [
@@ -56,7 +57,7 @@ function roleLabel(user: User) {
     return "Сотрудник"
 }
 
-function AdminNavLink({ item }: { item: { title: string; href: string; icon: React.ElementType } }) {
+function AdminNavLink({ item }: { item: { title: string; href: string; icon: React.ElementType; adminOnly?: boolean } }) {
     const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
     const Icon = item.icon
@@ -110,7 +111,9 @@ function AdminSidebar({ user, canManageSystem }: { user: User; canManageSystem: 
                     <SidebarGroupLabel>Управление</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {mainItems.map((item) => <AdminNavLink key={item.href} item={item} />)}
+                            {mainItems
+                                .filter((item) => !item.adminOnly || canManageSystem)
+                                .map((item) => <AdminNavLink key={item.href} item={item} />)}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

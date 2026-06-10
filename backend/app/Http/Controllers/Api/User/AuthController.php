@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserResource;
+use App\Models\LegalPage;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +20,10 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',
+            'privacy_policy_accepted' => ['required', 'accepted'],
+        ], [
+            'privacy_policy_accepted.required' => 'Необходимо согласиться с политикой конфиденциальности данных',
+            'privacy_policy_accepted.accepted' => 'Необходимо согласиться с политикой конфиденциальности данных',
         ]);
 
         $user = User::create([
@@ -26,6 +31,10 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => $request->password,
             'email_verified_at' => null,
+            'privacy_policy_accepted_at' => now(),
+            'privacy_policy_page_updated_at' => LegalPage::query()
+                ->where('slug', LegalPage::PRIVACY_POLICY_SLUG)
+                ->value('updated_at'),
         ]);
 
         $user->sendEmailVerificationNotification();

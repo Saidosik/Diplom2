@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
             email: body.email,
             password: body.password,
             password_confirmation: body.password_confirmation,
+            privacy_policy_accepted: body.privacy_policy_accepted,
         });
 
         const token = registerResponse.data?.access_token ?? registerResponse.data?.token;

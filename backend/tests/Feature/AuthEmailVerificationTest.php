@@ -23,6 +23,7 @@ class AuthEmailVerificationTest extends TestCase
             'email' => 'ivan@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
+            'privacy_policy_accepted' => true,
         ]);
 
         $response->assertCreated()

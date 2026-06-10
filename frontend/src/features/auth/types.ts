@@ -56,6 +56,7 @@ export type RegisterDto = {
   email: string
   password: string
   password_confirmation: string
+  privacy_policy_accepted: boolean
 }
 
 export type UpdateProfileDto = {

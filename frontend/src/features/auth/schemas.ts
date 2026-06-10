@@ -11,6 +11,7 @@ export const registerSchema = z
         email: z.email({ error: "Введите корректную почту" }),
         password: z.string().min(8, "Минимум 8 символов"),
         password_confirmation: z.string().min(8, "Минимум 8 символов"),
+        privacy_policy_accepted: z.literal(true, { error: "Необходимо согласиться с политикой конфиденциальности данных" }),
     })
     .refine((data) => data.password === data.password_confirmation, {
         path: ["password_confirmation"],
