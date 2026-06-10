@@ -131,3 +131,31 @@ export async function getAdminLogs(params?: { q?: string; level?: string; lines?
     const response = await browserApi.get<AdminLogsResponse>("/laravel/admin/logs", { params })
     return response.data
 }
+
+export type AdminTagPayload = {
+    name: string
+    slug?: string
+    description?: string | null
+    color: string
+    is_active?: boolean
+}
+
+export async function getAdminTags(params?: AdminListParams & { readability?: string; usage?: string; sort?: string; direction?: string }) {
+    const response = await browserApi.get<import("./types").AdminTagsResponse>("/laravel/admin/tags", { params })
+    return response.data
+}
+
+export async function createAdminTag(payload: AdminTagPayload) {
+    const response = await browserApi.post<{ data: import("./types").AdminTag }>("/laravel/admin/tags", payload)
+    return response.data.data
+}
+
+export async function updateAdminTag(id: number, payload: AdminTagPayload) {
+    const response = await browserApi.patch<{ data: import("./types").AdminTag }>(`/laravel/admin/tags/${id}`, payload)
+    return response.data.data
+}
+
+export async function deleteAdminTag(id: number) {
+    const response = await browserApi.delete<{ message: string }>(`/laravel/admin/tags/${id}`)
+    return response.data
+}

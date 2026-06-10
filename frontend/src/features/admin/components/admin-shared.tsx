@@ -19,13 +19,13 @@ export const reportStatuses = [
 
 export function AdminPageHeader({ title, description, actions }: { title: string; description: string; actions?: React.ReactNode }) {
     return (
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
+        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
                 <p className="text-sm font-medium text-primary">Администрирование</p>
-                <h1 className="mt-1 text-3xl font-semibold tracking-tight">{title}</h1>
-                <p className="mt-2 max-w-3xl text-muted-foreground">{description}</p>
+                <h1 className="mt-1 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">{description}</p>
             </div>
-            {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+            {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
         </div>
     )
 }
@@ -53,12 +53,12 @@ export function AdminNav() {
 
 export function StatCard({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
     return (
-        <Card>
-            <CardHeader className="pb-2">
-                <CardDescription>{label}</CardDescription>
-                <CardTitle className="text-3xl">{value}</CardTitle>
+        <Card className="min-w-0">
+            <CardHeader className="min-w-0 pb-2">
+                <CardDescription className="truncate">{label}</CardDescription>
+                <CardTitle className="break-words text-2xl sm:text-3xl">{value}</CardTitle>
             </CardHeader>
-            {hint ? <CardContent className="pt-0 text-sm text-muted-foreground">{hint}</CardContent> : null}
+            {hint ? <CardContent className="min-w-0 break-words pt-0 text-sm text-muted-foreground">{hint}</CardContent> : null}
         </Card>
     )
 }
@@ -80,18 +80,18 @@ export function AdminFilters({
 }) {
     return (
         <Card>
-            <CardContent className="flex flex-col gap-3 pt-6 md:flex-row md:items-center">
+            <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
                 <Input
                     value={query}
                     onChange={(event) => onQueryChange(event.target.value)}
                     placeholder="Поиск"
-                    className="md:max-w-sm"
+                    className="min-w-0 lg:max-w-sm"
                 />
                 {onStatusChange ? (
                     <select
                         value={status}
                         onChange={(event) => onStatusChange(event.target.value)}
-                        className="h-10 rounded-md border bg-background px-3 text-sm"
+                        className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm"
                     >
                         {statusOptions.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -116,9 +116,11 @@ export function StatusBadge({ status }: { status?: string | null }) {
 
 export function AdminTable({ children }: { children: React.ReactNode }) {
     return (
-        <Card>
-            <CardContent className="p-0">
-                <Table>{children}</Table>
+        <Card className="min-w-0">
+            <CardContent className="min-w-0 p-0">
+                <div className="w-full overflow-x-auto">
+                    <Table className="min-w-max">{children}</Table>
+                </div>
             </CardContent>
         </Card>
     )
