@@ -51,8 +51,9 @@ export function RegisterForm() {
                     setError(result?.error?.message ?? "Ошибка регистрации")
                     return
                 }
-                toast.success('Успешная регистрация')
-                router.push("/profile")
+                toast.success(result.data.message ?? 'Мы отправили письмо для подтверждения email')
+                router.push(`/verify-email?email=${encodeURIComponent(result.data.email ?? value.email)}`)
+                router.refresh()
             } catch (errorResponse) {
                 console.log("[ERROR]" + errorResponse)
 

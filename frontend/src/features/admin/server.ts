@@ -1,7 +1,7 @@
 import "server-only"
 
 import { redirect } from "next/navigation"
-import { requireUser } from "@/features/auth/server"
+import { requireVerifiedUser } from "@/features/auth/server"
 
 function isAdminRole(user: { role?: string; meta?: { isAdmin?: boolean; canManageSystem?: boolean } }) {
     return user.meta?.isAdmin === true || user.meta?.canManageSystem === true || user.role === "admin"
@@ -12,7 +12,7 @@ function isStaffRole(user: { role?: string; meta?: { isAdmin?: boolean; isModera
 }
 
 export async function requireStaff() {
-    const user = await requireUser()
+    const user = await requireVerifiedUser()
 
     if (!isStaffRole(user)) {
         redirect("/")

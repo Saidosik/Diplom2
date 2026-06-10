@@ -87,14 +87,18 @@ Route::middleware(['refresh', 'throttle:auth'])->post('/refresh', [AuthControlle
 Route::post('/forgot-password', [PasswordController::class, 'sendResetLink'])->middleware('throttle:auth');
 Route::post('/reset-password', [PasswordController::class, 'reset'])->middleware('throttle:auth');
 
-Route::get('/email/verify/{id}', [VerifyEmailAcountController::class, 'verify'])
+Route::get('/email/verify/{id}/{hash}', [VerifyEmailAcountController::class, 'verify'])
+    ->middleware(['signed', 'throttle:auth'])
     ->name('verification.verify');
 
-Route::middleware('jwt')->group(function () {
+Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::post('/broadcasting/auth', fn (Request $request) => Broadcast::auth($request))->middleware('throttle:presence');
 
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::post('/email/verification-notification', [VerifyEmailAcountController::class, 'send'])->middleware('throttle:6,1');
+    Route::get('/email/verification-status', [VerifyEmailAcountController::class, 'status']);
 
     Route::get('/me/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/me', [ProfileController::class, 'update']);

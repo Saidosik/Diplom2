@@ -1,17 +1,17 @@
 import { browserApi } from '@/lib/http/browser';
-import type { AuthMeResponse, LoginDto, RegisterDto, UpdateProfileDto, User } from './types';
+import type { AuthActionResponse, AuthMeResponse, LoginDto, RegisterDto, UpdateProfileDto, User } from './types';
 
 function unwrapUser(payload: unknown): User {
   const data = payload as { data?: User; user?: User };
   return data.data ?? data.user ?? (payload as User);
 }
 
-export async function login(payload: LoginDto) {
+export async function login(payload: LoginDto): Promise<AuthActionResponse> {
   const response = await browserApi.post('/auth/login', payload);
   return response.data;
 }
 
-export async function register(payload: RegisterDto) {
+export async function register(payload: RegisterDto): Promise<AuthActionResponse> {
   const response = await browserApi.post('/auth/register', payload);
   return response.data;
 }
@@ -46,10 +46,10 @@ export async function deleteAvatar(): Promise<User | null> {
   return payload.user ?? payload.data ?? null;
 }
 
-// export async function resendEmailVerification(): Promise<{ message: string }> {
-//   const response = await browserApi.post('/laravel/email/verification-notification');
-//   return response.data;
-// }
+export async function resendEmailVerification(): Promise<AuthActionResponse> {
+  const response = await browserApi.post('/auth/email/verification-notification');
+  return response.data;
+}
 
 
 

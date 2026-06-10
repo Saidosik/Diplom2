@@ -2,23 +2,15 @@
 
 namespace App\Notifications;
 
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\URL;
-use Carbon\Carbon;
 
 class VerifyEmailNotification extends Notification
 {
     use Queueable;
-
-    /**
-     * Create a new notification instance.
-     */
-    public function __construct()
-    {
-        //
-    }
 
     /**
      * Get the notification's delivery channels.
@@ -33,26 +25,27 @@ class VerifyEmailNotification extends Notification
     /**
      * Get the mail representation of the notification.
      */
-
-
-    public function toMail($notifiable)
+    public function toMail(object $notifiable): MailMessage
     {
-        // 1. Генерируем временную ссылку, указывающую на ваш ЛАРАВЕЛЬ-эндпоинт (бэкенд)
         $verifyUrl = URL::temporarySignedRoute(
             'verification.verify',
-            Carbon::now()->addMinutes(60),
-            ['id' => $notifiable->getKey()]
+            Carbon::now()->addMinutes((int) config('auth.verification.expire', 60)),
+            [
+                'id' => $notifiable->getKey(),
+                'hash' => sha1($notifiable->getEmailForVerification()),
+            ]
         );
-
-        // 2. Превращаем её в ссылку на Next.js
-        // Берем query параметры (expires и signature) из сгенерированного URL
-        $parsedUrl = parse_url($verifyUrl);
-        $frontendUrl = env('FRONTEND_URL') . '/verify-email?id=' . $notifiable->getKey() . '&' . $parsedUrl['query'];
 
         return (new MailMessage)
             ->subject('Подтвердите ваш email')
-            ->action('Подтвердить почту', $frontendUrl)
-            ->line('Ссылка действительна 60 минут.');
+            ->greeting('Здравствуйте!')
+            ->line('Мы отправили это письмо после регистрации на платформе IT-сообщества.')
+            ->line('Нажмите кнопку ниже, чтобы подтвердить email и получить доступ к публикациям, профилю, рекомендациям, AI-ассистенту и другим разделам.')
+            ->action('Подтвердить email', $verifyUrl)
+            ->line('Если кнопка не работает, скопируйте и откройте эту ссылку в браузере:')
+            ->line($verifyUrl)
+            ->line('Ссылка действительна 60 минут.')
+            ->line('Если вы не регистрировались, просто проигнорируйте это письмо.');
     }
 
     /**
@@ -62,8 +55,6 @@ class VerifyEmailNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 }
