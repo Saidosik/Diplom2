@@ -1,84 +1,144 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { CheckCircle2, LoaderCircle, XCircle } from "lucide-react"
+import { motion } from "framer-motion"
+import { LoaderCircle, LogOut, MailCheck, RefreshCcw } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
     Card,
     CardContent,
     CardDescription,
+    CardFooter,
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-import { browserApi } from "@/lib/http/browser"
+import { resendEmailVerification, logout } from "@/features/auth/api"
+import { getMe } from "@/features/auth/api"
+import { safeRequest } from "@/lib/http/api-errors"
+
+const COOLDOWN_SECONDS = 60
 
 function VerifyEmail() {
     const searchParams = useSearchParams()
-    const [resultMessage, setResultMessage] = useState("")
-    const [error, setError] = useState(false)
-    const [isLoading, setIsLoading] = useState(true)
     const router = useRouter()
+    const emailFromUrl = searchParams.get("email")
+    const [email, setEmail] = useState(emailFromUrl ?? "")
+    const [cooldown, setCooldown] = useState(0)
+    const [isResending, setIsResending] = useState(false)
+    const [isChecking, setIsChecking] = useState(true)
+
+    const safeEmail = useMemo(() => email || emailFromUrl || "ваш email", [email, emailFromUrl])
 
     useEffect(() => {
-        const verify = async () => {
-            const id = searchParams.get("id")
-            const expires = searchParams.get("expires")
-            const signature = searchParams.get("signature")
+        const loadStatus = async () => {
+            const result = await safeRequest(getMe())
 
-            try {
-                const response = await browserApi.get("/auth/verify-email/", {
-                    params: { id, expires, signature },
-                })
+            if (result.success) {
+                setEmail(result.data.email)
 
-                setResultMessage(response.data.message ?? "Email успешно подтверждён")
-            } catch {
-                setResultMessage("Не удалось подтвердить email. Возможно, ссылка устарела или была повреждена.")
-                setError(true)
-            } finally {
-                setIsLoading(false)
+                if (result.data.email_verified || result.data.is_email_verified) {
+                    router.replace("/auth/email-verified?verified=1")
+                    return
+                }
             }
+
+            setIsChecking(false)
         }
 
-        verify()
-    }, [searchParams, router])
+        loadStatus()
+    }, [router])
+
+    useEffect(() => {
+        if (cooldown <= 0) {
+            return
+        }
+
+        const timer = window.setInterval(() => {
+            setCooldown((value) => Math.max(0, value - 1))
+        }, 1000)
+
+        return () => window.clearInterval(timer)
+    }, [cooldown])
+
+    const handleResend = async () => {
+        setIsResending(true)
+        const result = await safeRequest(resendEmailVerification())
+        setIsResending(false)
+
+        if (!result.success) {
+            toast.error(result.error.message)
+            return
+        }
+
+        toast.success(result.data.message ?? "Письмо отправлено повторно")
+        setCooldown(COOLDOWN_SECONDS)
+    }
+
+    const handleLogout = async () => {
+        await safeRequest(logout())
+        router.push("/auth?mode=login")
+        router.refresh()
+    }
 
     return (
-        <Card className="w-full sm:max-w-md">
-            <CardHeader className="text-center">
-                <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-2xl border bg-background">
-                    {isLoading ? (
-                        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                    ) : error ? (
-                        <XCircle className="size-5 text-destructive" />
-                    ) : (
-                        <CheckCircle2 className="size-5 text-emerald-500" />
-                    )}
-                </div>
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="w-full sm:max-w-lg"
+        >
+            <Card className="border-primary/10 bg-card/95 shadow-xl shadow-primary/5 backdrop-blur">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-primary/10 text-primary">
+                        {isChecking ? <LoaderCircle className="size-6 animate-spin" /> : <MailCheck className="size-6" />}
+                    </div>
+                    <CardTitle className="text-2xl">Подтвердите email</CardTitle>
+                    <CardDescription className="text-base">
+                        Мы отправили письмо с подтверждением на ваш email.
+                    </CardDescription>
+                </CardHeader>
 
-                <CardTitle>
-                    {isLoading
-                        ? "Проверяем ссылку"
-                        : error
-                          ? "Подтверждение не выполнено"
-                          : "Email подтверждён"}
-                </CardTitle>
+                <CardContent className="space-y-4 text-center">
+                    <div className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+                        <p className="text-muted-foreground">Адрес для подтверждения</p>
+                        <p className="mt-1 break-all font-medium text-foreground">{safeEmail}</p>
+                    </div>
 
-                <CardDescription>{resultMessage || "Подождите несколько секунд."}</CardDescription>
-            </CardHeader>
-
-            {!isLoading && (
-                <CardContent>
-                    <Button asChild className="w-full">
-                        <Link href={error ? "/settings" : "/profile"}>
-                            {error ? "Перейти в настройки" : "Перейти в профиль"}
-                        </Link>
-                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                        Перейдите по ссылке из письма. Проверьте папку “Спам”, если письмо не пришло.
+                    </p>
                 </CardContent>
-            )}
-        </Card>
+
+                <CardFooter className="flex flex-col gap-3">
+                    <Button
+                        type="button"
+                        className="w-full"
+                        onClick={handleResend}
+                        disabled={isResending || cooldown > 0 || isChecking}
+                    >
+                        {isResending ? (
+                            <LoaderCircle className="size-4 animate-spin" />
+                        ) : (
+                            <RefreshCcw className="size-4" />
+                        )}
+                        {cooldown > 0 ? `Отправить повторно через ${cooldown} сек.` : "Отправить письмо повторно"}
+                    </Button>
+
+                    <Button type="button" variant="outline" className="w-full" onClick={handleLogout}>
+                        <LogOut className="size-4" />
+                        Выйти
+                    </Button>
+
+                    <Button asChild variant="link" className="text-muted-foreground">
+                        <Link href="/auth?mode=login">Вернуться ко входу</Link>
+                    </Button>
+                </CardFooter>
+            </Card>
+        </motion.div>
     )
 }
 

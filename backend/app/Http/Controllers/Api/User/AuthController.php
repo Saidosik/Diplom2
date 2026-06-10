@@ -4,16 +4,15 @@ namespace App\Http\Controllers\Api\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserResource;
+use App\Models\LegalPage;
 use App\Models\User;
-use App\Notifications\VerifyEmailNotification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
 {
-
     /** @var \App\Models\User $user */
     public function register(Request $request)
     {
@@ -21,15 +20,24 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',
+            'privacy_policy_accepted' => ['required', 'accepted'],
+        ], [
+            'privacy_policy_accepted.required' => 'Необходимо согласиться с политикой конфиденциальности данных',
+            'privacy_policy_accepted.accepted' => 'Необходимо согласиться с политикой конфиденциальности данных',
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => $request->password,
+            'email_verified_at' => null,
+            'privacy_policy_accepted_at' => now(),
+            'privacy_policy_page_updated_at' => LegalPage::query()
+                ->where('slug', LegalPage::PRIVACY_POLICY_SLUG)
+                ->value('updated_at'),
         ]);
 
-        $user->notify(new VerifyEmailNotification());
+        $user->sendEmailVerificationNotification();
 
         try {
             $token = JWTAuth::fromUser($user);
@@ -44,6 +52,9 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'expires_in' => JWTAuth::factory()->getTTL() * 60,
+            'requires_email_verification' => true,
+            'email' => $user->email,
+            'message' => 'Мы отправили письмо для подтверждения email',
             'user' => UserResource::make($user->load('socialAccounts'))->resolve($request),
         ], 201);
     }
@@ -55,12 +66,18 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
+        /** @var User|null $user */
+        $user = User::query()->where('email', $credentials['email'])->first();
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            return response()->json([
+                'error' => 'Неверный email или пароль',
+                'message' => 'Неверный email или пароль',
+            ], 401);
+        }
+
         try {
-            if (! $token = JWTAuth::attempt($credentials)) {
-                return response()->json([
-                    'error' => 'Неверный email или пароль',
-                ], 401);
-            }
+            $token = JWTAuth::fromUser($user);
         } catch (JWTException $e) {
             report($e);
 
@@ -70,10 +87,20 @@ class AuthController extends Controller
                 'exception' => get_class($e),
             ], 500);
         }
-        /** @var User $user */
-        $user = auth('api')->user();
 
         $user->load('socialAccounts');
+
+        if (! $user->hasVerifiedEmail()) {
+            return response()->json([
+                'token' => $token,
+                'expires_in' => JWTAuth::factory()->getTTL() * 60,
+                'code' => 'EMAIL_NOT_VERIFIED',
+                'requires_email_verification' => true,
+                'email' => $user->email,
+                'message' => 'Подтвердите email, чтобы продолжить',
+                'user' => UserResource::make($user)->resolve($request),
+            ], 403);
+        }
 
         return response()->json([
             'token' => $token,

@@ -11,6 +11,9 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        $this->call(CommunityPlatformSeeder::class);
+        $this->call([
+            LegalPageSeeder::class,
+            CommunityPlatformSeeder::class,
+        ]);
     }
 }

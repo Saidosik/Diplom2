@@ -5,7 +5,6 @@ import { ACCESS_TOKEN_COOKIE } from '@/lib/auth/constants';
 import { buildAccessTokenCookieOptions } from '@/lib/auth/cookies';
 import { registerSchema } from '@/features/auth/schemas';
 import z from 'zod';
-import { redirect } from 'next/navigation';
 
 export async function POST(request: NextRequest) {
     const rawBody = await request.json().catch(() => null);
@@ -32,38 +31,26 @@ export async function POST(request: NextRequest) {
             email: body.email,
             password: body.password,
             password_confirmation: body.password_confirmation,
+            privacy_policy_accepted: body.privacy_policy_accepted,
         });
 
-        let token =
-            registerResponse.data?.access_token ?? registerResponse.data?.token;
-        let expiresIn = registerResponse.data?.expires_in;
+        const token = registerResponse.data?.access_token ?? registerResponse.data?.token;
+        const expiresIn = registerResponse.data?.expires_in;
 
-        if (!token) {
-            const loginResponse = await laravel.post('/login', {
-                email: body.email,
-                password: body.password,
-            });
+        const result = NextResponse.json({
+            ok: true,
+            message: registerResponse.data?.message ?? 'Мы отправили письмо для подтверждения email',
+            requires_email_verification: registerResponse.data?.requires_email_verification === true,
+            email: registerResponse.data?.email ?? body.email,
+        }, { status: registerResponse.status });
 
-            token =
-                loginResponse.data?.access_token ?? loginResponse.data?.token;
-            expiresIn = loginResponse.data?.expires_in;
-        }
-
-        if (!token) {
-            return NextResponse.json(
-                { message: 'Не удалось получить токен после регистрации' },
-                { status: 500 },
+        if (token) {
+            result.cookies.set(
+                ACCESS_TOKEN_COOKIE,
+                token,
+                buildAccessTokenCookieOptions(expiresIn),
             );
         }
-
-        const result = NextResponse.json({ ok: true });
-
-        result.cookies.set(
-            ACCESS_TOKEN_COOKIE,
-            token,
-            buildAccessTokenCookieOptions(expiresIn),
-        );
-
 
         return result;
     } catch (error) {

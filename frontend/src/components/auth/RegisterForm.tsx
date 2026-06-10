@@ -3,6 +3,7 @@ import * as React from "react"
 import { useForm } from "@tanstack/react-form"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
     Card,
     CardContent,
@@ -38,6 +39,7 @@ export function RegisterForm() {
             email: "",
             password: "",
             password_confirmation: "",
+            privacy_policy_accepted: false,
         },
         validators: {
             onSubmit: registerSchema,
@@ -51,8 +53,9 @@ export function RegisterForm() {
                     setError(result?.error?.message ?? "Ошибка регистрации")
                     return
                 }
-                toast.success('Успешная регистрация')
-                router.push("/profile")
+                toast.success(result.data.message ?? 'Мы отправили письмо для подтверждения email')
+                router.push(`/verify-email?email=${encodeURIComponent(result.data.email ?? value.email)}`)
+                router.refresh()
             } catch (errorResponse) {
                 console.log("[ERROR]" + errorResponse)
 
@@ -222,6 +225,35 @@ export function RegisterForm() {
                                                 className="pr-10" // Отступ справа, чтобы текст не наезжал на иконку
                                             />
 
+                                        </div>
+                                        {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                                    </Field>
+                                )
+                            }}
+                        </form.Field>
+                        <form.Field
+                            name="privacy_policy_accepted">
+                            {(field) => {
+                                const isInvalid =
+                                    field.state.meta.isTouched && !field.state.meta.isValid
+
+                                return (
+                                    <Field data-invalid={isInvalid}>
+                                        <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
+                                            <Checkbox
+                                                id={field.name}
+                                                name={field.name}
+                                                checked={field.state.value}
+                                                onBlur={field.handleBlur}
+                                                onCheckedChange={(checked) => field.handleChange(checked === true)}
+                                                aria-invalid={isInvalid}
+                                            />
+                                            <label htmlFor={field.name} className="text-sm leading-5 text-muted-foreground">
+                                                Я согласен с{" "}
+                                                <Link href="/privacy-policy" className="font-medium text-primary underline-offset-4 hover:underline">
+                                                    политикой конфиденциальности данных
+                                                </Link>
+                                            </label>
                                         </div>
                                         {isInvalid && <FieldError errors={field.state.meta.errors} />}
                                     </Field>

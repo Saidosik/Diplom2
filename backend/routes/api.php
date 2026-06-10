@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminLogController;
+use App\Http\Controllers\Api\Admin\AdminLegalPageController;
 use App\Http\Controllers\Api\Admin\AdminTagController;
 use App\Http\Controllers\Api\Ai\AiAssistantController;
 use App\Http\Controllers\Api\Ai\RagController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\Api\Social\FriendController;
 use App\Http\Controllers\Api\Social\PresenceController;
 use App\Http\Controllers\Api\Search\GlobalSearchController;
 use App\Http\Controllers\Api\Tag\TagController;
+use App\Http\Controllers\Api\Legal\LegalPageController;
 use App\Http\Controllers\Api\User\SocialAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
@@ -74,6 +76,7 @@ Route::get('/ai/chat/models', [RagController::class, 'models'])->middleware('thr
 Route::post('/ai/rag/search', [RagController::class, 'search'])->middleware('throttle:ai');
 Route::get('/playground/languages', [CodePlaygroundController::class, 'languages']);
 Route::get('/playground/public-snippets/{codeSnippet}', [CodePlaygroundController::class, 'publicSnippet']);
+Route::get('/legal/privacy-policy', [LegalPageController::class, 'privacyPolicy']);
 
 Route::prefix('oauth')->group(function () {
     Route::get('/{provider}/redirect-url', [SocialAuthController::class, 'redirectUrl']);
@@ -87,14 +90,18 @@ Route::middleware(['refresh', 'throttle:auth'])->post('/refresh', [AuthControlle
 Route::post('/forgot-password', [PasswordController::class, 'sendResetLink'])->middleware('throttle:auth');
 Route::post('/reset-password', [PasswordController::class, 'reset'])->middleware('throttle:auth');
 
-Route::get('/email/verify/{id}', [VerifyEmailAcountController::class, 'verify'])
+Route::get('/email/verify/{id}/{hash}', [VerifyEmailAcountController::class, 'verify'])
+    ->middleware(['signed', 'throttle:auth'])
     ->name('verification.verify');
 
-Route::middleware('jwt')->group(function () {
+Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::post('/broadcasting/auth', fn (Request $request) => Broadcast::auth($request))->middleware('throttle:presence');
 
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::post('/email/verification-notification', [VerifyEmailAcountController::class, 'send'])->middleware('throttle:6,1');
+    Route::get('/email/verification-status', [VerifyEmailAcountController::class, 'status']);
 
     Route::get('/me/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/me', [ProfileController::class, 'update']);
@@ -230,6 +237,9 @@ Route::middleware('jwt')->group(function () {
             Route::delete('/ai/index/documents/{document}', [AdminAiIndexController::class, 'destroyDocument']);
             Route::post('/ai/reindex', [AdminAiIndexController::class, 'rebuild']);
         });
+
+        Route::get('/legal-pages/{slug}', [AdminLegalPageController::class, 'show'])->middleware('system_admin');
+        Route::match(['put', 'patch'], '/legal-pages/{slug}', [AdminLegalPageController::class, 'update'])->middleware('system_admin');
 
         Route::get('/tags', [AdminTagController::class, 'index']);
         Route::get('/tags/stats', [AdminTagController::class, 'stats']);
