@@ -183,3 +183,60 @@ export type AdminLogsResponse = {
         returned?: number
     }
 }
+
+export type AdminTagReadability = {
+    ratio: number
+    status: "good" | "acceptable" | "poor"
+    label: string
+}
+
+export type AdminTag = {
+    id: number
+    name: string
+    slug: string
+    description?: string | null
+    color?: string | null
+    status: string
+    is_active: boolean
+    posts_count: number
+    publications_count: number
+    questions_count: number
+    total_usage_count: number
+    usage_percent: number
+    readability_light: AdminTagReadability
+    readability_dark: AdminTagReadability
+    created_at?: string | null
+    updated_at?: string | null
+}
+
+export type AdminTagStats = {
+    totals: {
+        tags: number
+        active_tags: number
+        inactive_tags: number
+        used_tags: number
+        unused_tags: number
+        poor_light_tags: number
+        poor_dark_tags: number
+        avg_publications_per_tag: number
+        avg_questions_per_tag: number
+        avg_light_contrast: number
+        avg_dark_contrast: number
+        materials_total: number
+        tagged_materials_total: number
+        tagged_materials_percent: number
+    }
+    top_publications: AdminTag[]
+    top_questions: AdminTag[]
+    top_activity: AdminTag[]
+    active_distribution: Array<{ name: string; value: number; percent: number }>
+    readability_distribution: Array<{ name: string; value: number; percent: number }>
+    usage_distribution: Array<{ name: string; value: number; percent: number }>
+    popular_tag?: AdminTag | null
+    problem_tag?: AdminTag | null
+    needs_color_work: number
+}
+
+export type AdminTagsResponse = Paginated<AdminTag> & {
+    stats: AdminTagStats
+}

@@ -8,6 +8,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import createLaravelApi from "@/lib/http/laravel"
 import { getAccessTokenCookie } from "@/lib/auth/cookies"
 import type { CommunityRecommendation } from "@/features/community/types"
+import { TagBadge } from "@/features/tags/components/tag-badge"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -130,9 +131,7 @@ export default async function RecommendationsPage({ searchParams }: Recommendati
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-2">
                         {matchedTags.map((tag) => (
-                            <Button key={tag.id} asChild variant="outline" size="sm">
-                                <Link href={`/tags/${tag.slug}`}>#{tag.name}</Link>
-                            </Button>
+                            <TagBadge key={tag.id} tag={tag} compact />
                         ))}
                     </CardContent>
                 </Card>
