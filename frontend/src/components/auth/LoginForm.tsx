@@ -53,6 +53,18 @@ export function LoginForm() {
                     setError(message)
                     toast.error(message)
 
+                    if (result.error?.code === "EMAIL_NOT_VERIFIED") {
+                        router.push(`/verify-email?email=${encodeURIComponent(value.email)}`)
+                        router.refresh()
+                    }
+
+                    return
+                }
+
+                if (result.data.requires_email_verification) {
+                    toast.info(result.data.message ?? "Подтвердите email, чтобы продолжить")
+                    router.push(`/verify-email?email=${encodeURIComponent(result.data.email ?? value.email)}`)
+                    router.refresh()
                     return
                 }
 

@@ -26,6 +26,12 @@ browserApi.interceptors.response.use(
       : error.response?.data?.message || 'Что-то пошло не так';
     const code = error.response?.data?.code || (status === 429 ? 'RATE_LIMITED' : 'INTERNAL_ERROR');
 
+    if (!isServer && status === 403 && code === 'EMAIL_NOT_VERIFIED' && window.location.pathname !== '/verify-email') {
+      const email = error.response?.data?.email;
+      const query = email ? `?email=${encodeURIComponent(email)}` : '';
+      window.location.assign(`/verify-email${query}`);
+    }
+
     throw new ApiError(message, status, code);
   }
 );

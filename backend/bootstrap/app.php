@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\JWTMiddleware;
+use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\RefreshMiddleware;
 use App\Http\Middleware\SystemAdminMiddleware;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
          $middleware->alias([
             'jwt' => JWTMiddleware::class,
+            'email_verified' => EnsureEmailIsVerified::class,
             'refresh' => RefreshMiddleware::class,
             'admin' => AdminMiddleware::class,
             'system_admin' => SystemAdminMiddleware::class,

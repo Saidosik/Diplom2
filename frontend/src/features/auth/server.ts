@@ -36,11 +36,25 @@ export async function getCurrentUser(): Promise<User | null> {
     }
 }
 
+export function hasVerifiedEmail(user: User): boolean {
+    return user.email_verified === true || user.is_email_verified === true
+}
+
 export async function requireUser(): Promise<User> {
     const user = await getCurrentUser()
 
     if (!user) {
         redirect("/auth?mode=login")
+    }
+
+    return user
+}
+
+export async function requireVerifiedUser(): Promise<User> {
+    const user = await requireUser()
+
+    if (!hasVerifiedEmail(user)) {
+        redirect(`/verify-email?email=${encodeURIComponent(user.email)}`)
     }
 
     return user

@@ -49,6 +49,8 @@ class UserResource extends JsonResource
 
             'email_verified_at' => $this->email_verified_at?->toISOString(),
             'is_email_verified' => $this->hasVerifiedEmail(),
+            'email_verified' => $this->hasVerifiedEmail(),
+            'requires_email_verification' => ! $this->hasVerifiedEmail(),
 
             'registered_via' => $registeredVia,
             'auth_providers' => count($providers) > 0 ? $providers : ['email/password'],

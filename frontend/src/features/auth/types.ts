@@ -31,6 +31,8 @@ export type User = {
   last_seen_at?: string | null
   email_verified_at?: string | null
   is_email_verified?: boolean
+  email_verified?: boolean
+  requires_email_verification?: boolean
   registered_via?: string | string[]
   auth_providers?: string[]
   social_accounts?: SocialAccount[]
@@ -69,6 +71,14 @@ export type UpdateProfileDto = {
 
 export type AuthMeResponse = {
   user: User
+}
+
+export type AuthActionResponse = {
+  ok?: boolean
+  message?: string
+  code?: string
+  requires_email_verification?: boolean
+  email?: string
 }
 
 export type AllowedAuthProviders = "yandex" | "google"
