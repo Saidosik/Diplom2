@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mxfile host="app.diagrams.net" modified="2026-06-11T00:00:00.000Z" agent="Codex" version="28.0.0" type="device">
+  <diagram id="use-case" name="Use Case">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="UML Use Case Diagram — «Вектор»" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="540" y="20" width="520" height="30"/>
+        </mxCell>
+        <mxCell id="legend" value="Легенда: &lt;&lt;include&gt;&gt; — обязательный общий сценарий; &lt;&lt;extend&gt;&gt; — условное или альтернативное поведение." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="500" y="55" width="680" height="30"/>
+        </mxCell>
+        <mxCell id="system" value="Платформа «Вектор»" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0f172a;fontStyle=1;verticalAlign=top;spacingTop=8;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="260" y="100" width="1160" height="840"/>
+        </mxCell>
+        <mxCell id="Visitor" value="Посетитель" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="70" y="150" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="Registered" value="Зарегистрированный&lt;br&gt;пользователь" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="70" y="315" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="Staff" value="Сотрудник" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="70" y="545" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="Moderator" value="Модератор" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="70" y="690" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="Admin" value="Администратор" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="70" y="820" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="OAuth" value="OAuth-провайдер&lt;br&gt;(Google/Yandex)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="1510" y="205" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="Mail" value="Почтовый сервис" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="1510" y="345" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="AIProvider" value="AI-провайдер" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="1510" y="580" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="CodeEnv" value="Изолированная среда&lt;br&gt;выполнения кода" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="1510" y="740" width="70" height="90"/>
+        </mxCell>
+        <mxCell id="UC_Browse" value="Просматривать ленту&lt;br&gt;и материалы" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="330" y="140" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Search" value="Искать материалы&lt;br&gt;и участников" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="550" y="140" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_PublicProfile" value="Просматривать&lt;br&gt;публичный профиль" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="770" y="140" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Register" value="Зарегистрироваться&lt;br&gt;и подтвердить email" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="990" y="140" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Login" value="Войти в систему" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="330" y="270" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_OAuthLogin" value="Войти через OAuth" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="550" y="270" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_ResetPassword" value="Восстановить пароль" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="770" y="270" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_SendEmail" value="Отправить email-&lt;br&gt;уведомление" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="990" y="270" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_ProfileFiles" value="Управлять профилем&lt;br&gt;и файлами" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="330" y="430" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Publications" value="Создавать и вести&lt;br&gt;публикации" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="550" y="430" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_QA" value="Задавать вопросы&lt;br&gt;и отвечать" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="770" y="430" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Interactions" value="Взаимодействовать&lt;br&gt;с контентом" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="990" y="430" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Preferences" value="Настраивать интересы&lt;br&gt;и уведомления" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="330" y="570" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Social" value="Общаться с участниками" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="550" y="570" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_AI" value="Работать с AI-&lt;br&gt;помощником" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="770" y="570" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_Playground" value="Запускать код&lt;br&gt;в песочнице" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="990" y="570" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_ModerateReports" value="Модерировать жалобы" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="380" y="760" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_ModerateContent" value="Модерировать контент&lt;br&gt;и чаты" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="610" y="760" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_ManageUsersTags" value="Управлять пользователями&lt;br&gt;и тегами" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="840" y="760" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="UC_SystemAdmin" value="Управлять AI-индексом,&lt;br&gt;логами и правовыми страницами" style="shape=umlUseCase;whiteSpace=wrap;html=1;fillColor=#f8fafc;strokeColor=#334155;" parent="1" vertex="1">
+          <mxGeometry as="geometry" x="1070" y="760" width="150" height="70"/>
+        </mxCell>
+        <mxCell id="gen1" value="" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="Visitor">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="gen2" value="" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Staff" target="Registered">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="gen3" value="" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Moderator" target="Staff">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="gen4" value="" style="endArrow=block;endFill=0;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Admin" target="Staff">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc1" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_Browse">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc2" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_Search">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc3" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_PublicProfile">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc4" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_Register">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc5" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_Login">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc6" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Visitor" target="UC_ResetPassword">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc7" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_ProfileFiles">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc8" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_Publications">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc9" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_QA">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc10" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_Interactions">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc11" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_Preferences">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc12" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_Social">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc13" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_AI">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc14" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Registered" target="UC_Playground">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc15" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Staff" target="UC_ModerateReports">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc16" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Staff" target="UC_ModerateContent">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc17" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Staff" target="UC_ManageUsersTags">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc18" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Admin" target="UC_SystemAdmin">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc19" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="OAuth" target="UC_OAuthLogin">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc20" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="Mail" target="UC_SendEmail">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc21" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="AIProvider" target="UC_AI">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="assoc22" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#334155;" parent="1" edge="1" source="CodeEnv" target="UC_Playground">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="rel1" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#334155;edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;" parent="1" edge="1" source="UC_OAuthLogin" target="UC_Login">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="rel2" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#334155;edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;" parent="1" edge="1" source="UC_Register" target="UC_SendEmail">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+        <mxCell id="rel3" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;rounded=0;strokeColor=#334155;edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;" parent="1" edge="1" source="UC_ResetPassword" target="UC_SendEmail">
+          <mxGeometry as="geometry" relative="1"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
