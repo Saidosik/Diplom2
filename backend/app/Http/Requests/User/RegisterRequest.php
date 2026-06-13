@@ -23,8 +23,20 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users'],
-            'password' => ['required', 'min:8', 'confirmed'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'privacy_policy_accepted' => ['required', 'accepted'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'privacy_policy_accepted.required' => 'Необходимо согласиться с политикой конфиденциальности данных',
+            'privacy_policy_accepted.accepted' => 'Необходимо согласиться с политикой конфиденциальности данных',
         ];
     }
 }

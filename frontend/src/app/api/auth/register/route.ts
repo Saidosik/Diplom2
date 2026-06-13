@@ -55,19 +55,31 @@ export async function POST(request: NextRequest) {
         return result;
     } catch (error) {
         if (axios.isAxiosError(error)) {
+            const status = error.response?.status ?? 500;
+
+            if (status === 422) {
+                return NextResponse.json(
+                    {
+                        message: error.response?.data?.message ?? 'Ошибка валидации',
+                        errors: error.response?.data?.errors ?? null,
+                    },
+                    { status: 422 },
+                );
+            }
+
             return NextResponse.json(
                 {
-                    message:
-                        error.response?.data?.message ??
-                        'Не удалось выполнить регистрацию',
-                    errors: error.response?.data?.errors ?? null,
+                    message: status >= 500
+                        ? 'Не удалось завершить регистрацию'
+                        : error.response?.data?.message ?? 'Не удалось завершить регистрацию',
+                    errors: null,
                 },
-                { status: error.response?.status ?? 500 },
+                { status },
             );
         }
 
         return NextResponse.json(
-            { message: 'Внутренняя ошибка сервера' },
+            { message: 'Не удалось завершить регистрацию' },
             { status: 500 },
         );
     }
