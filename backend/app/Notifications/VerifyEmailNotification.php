@@ -27,19 +27,22 @@ class VerifyEmailNotification extends Notification
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $verifyUrl = URL::temporarySignedRoute(
+        $relativeUrl = URL::temporarySignedRoute(
             'verification.verify',
             Carbon::now()->addMinutes((int) config('auth.verification.expire', 10)),
             [
                 'id' => $notifiable->getKey(),
                 'hash' => sha1($notifiable->getEmailForVerification()),
-            ]
+            ],
+            absolute: false
         );
+
+        $verificationUrl = rtrim(config('app.frontend_url', config('app.url')), '/') . $relativeUrl;
 
         return (new MailMessage)
             ->subject('Подтверждение email на платформе Вектор')
             ->view('emails.verify-email', [
-                'verificationUrl' => $verifyUrl,
+                'verificationUrl' => $verificationUrl,
                 'expireMinutes' => (int) config('auth.verification.expire', 10),
             ]);
     }
