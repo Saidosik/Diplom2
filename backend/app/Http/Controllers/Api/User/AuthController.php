@@ -3,41 +3,37 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\User\RegisterRequest;
 use App\Http\Resources\User\UserResource;
 use App\Models\LegalPage;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Log;
 use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
+use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
+use Throwable;
 
 class AuthController extends Controller
 {
     /** @var \App\Models\User $user */
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:8|confirmed',
-            'privacy_policy_accepted' => ['required', 'accepted'],
-        ], [
-            'privacy_policy_accepted.required' => 'Необходимо согласиться с политикой конфиденциальности данных',
-            'privacy_policy_accepted.accepted' => 'Необходимо согласиться с политикой конфиденциальности данных',
-        ]);
+        $validated = $request->validated();
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => $request->password,
-            'email_verified_at' => null,
-            'privacy_policy_accepted_at' => now(),
-            'privacy_policy_page_updated_at' => LegalPage::query()
-                ->where('slug', LegalPage::PRIVACY_POLICY_SLUG)
-                ->value('updated_at'),
-        ]);
-
-        $user->sendEmailVerificationNotification();
+        $user = DB::transaction(function () use ($validated) {
+            return User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'email_verified_at' => null,
+                'privacy_policy_accepted_at' => now(),
+                'privacy_policy_page_updated_at' => LegalPage::query()
+                    ->where('slug', LegalPage::PRIVACY_POLICY_SLUG)
+                    ->value('updated_at'),
+            ]);
+        });
 
         try {
             $token = JWTAuth::fromUser($user);
@@ -49,12 +45,29 @@ class AuthController extends Controller
             ], 500);
         }
 
+        $verificationNotificationSent = true;
+
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (Throwable $e) {
+            $verificationNotificationSent = false;
+
+            Log::warning('Email verification notification failed during registration.', [
+                'user_id' => $user->getKey(),
+                'email' => $user->email,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+
         return response()->json([
             'token' => $token,
             'expires_in' => JWTAuth::factory()->getTTL() * 60,
             'requires_email_verification' => true,
             'email' => $user->email,
-            'message' => 'Мы отправили письмо для подтверждения email',
+            'message' => $verificationNotificationSent
+                ? 'Мы отправили письмо для подтверждения email'
+                : 'Регистрация завершена. Не удалось отправить письмо подтверждения, попробуйте запросить его позже.',
             'user' => UserResource::make($user->load('socialAccounts'))->resolve($request),
         ], 201);
     }
