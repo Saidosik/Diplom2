@@ -6,7 +6,7 @@ import { buildAccessTokenCookieOptions } from '@/lib/auth/cookies';
 import createLaravelApi from '@/lib/http/laravel';
 import { buildSiteUrl } from '@/lib/site-url';
 
-const allowedProviders = ['google', 'yandex'];
+const allowedProviders = ['google', 'yandex', 'github'];
 
 type Params = {
   params: Promise<{

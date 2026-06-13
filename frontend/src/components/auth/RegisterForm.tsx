@@ -281,7 +281,7 @@ export function RegisterForm() {
                         Уже есть аккаунт? <Link href="?mode=login" className="text-primary">Войти</Link>
                     </p>
 
-                    <AuthSocialButtons providers={['google', 'yandex']} />
+                    <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
             </CardFooter>

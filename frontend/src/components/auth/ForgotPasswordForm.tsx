@@ -145,7 +145,7 @@ export function ForgotPasswordForm() {
                         </div>
                     )}
 
-                    <AuthSocialButtons providers={['google', 'yandex']} />
+                    <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
             </CardFooter>

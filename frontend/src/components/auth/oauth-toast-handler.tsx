@@ -7,6 +7,7 @@ import { toast } from "sonner"
 const providerLabels: Record<string, string> = {
     google: "Google",
     yandex: "Яндекс",
+    github: "GitHub",
 }
 
 export function OAuthToastHandler() {

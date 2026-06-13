@@ -13,6 +13,24 @@ Verification links use https://said-diplom.ru/api/email/verify/... and only that
 
 `LARAVEL_API_URL` must stay `http://backend:8000/api` because the frontend uses BFF routes. This internal Docker URL must never appear in verification emails; emails must use `https://said-diplom.ru`. Browser requests to `/api/*` go to Next.js, not directly to Laravel.
 
+
+## GitHub OAuth
+
+For production, create a GitHub OAuth App in GitHub Developer Settings:
+
+- Homepage URL: `https://said-diplom.ru`
+- Authorization callback URL: `https://said-diplom.ru/api/auth/oauth/github/callback`
+
+Configure Laravel with:
+
+```dotenv
+GITHUB_CLIENT_ID=CHANGE_ME
+GITHUB_CLIENT_SECRET=CHANGE_ME
+GITHUB_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/github/callback
+```
+
+The frontend keeps using BFF routes (`/api/auth/oauth/github/redirect` and `/api/auth/oauth/github/callback`), so `LARAVEL_API_URL` remains the internal Docker URL and JWTs are stored only in the httpOnly `access_token` cookie.
+
 ## SSL certificates
 
 Nginx mounts existing host certificates:

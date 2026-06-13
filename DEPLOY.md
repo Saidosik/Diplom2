@@ -53,11 +53,30 @@ FRONTEND_URL=https://said-diplom.ru
 EMAIL_VERIFICATION_EXPIRE_MINUTES=10
 GOOGLE_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/google/callback
 YANDEX_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/yandex/callback
+GITHUB_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/github/callback
 REVERB_ALLOWED_ORIGINS=https://said-diplom.ru,https://www.said-diplom.ru
 NEXT_PUBLIC_REVERB_HOST=said-diplom.ru
 NEXT_PUBLIC_REVERB_PORT=443
 NEXT_PUBLIC_REVERB_FORCE_TLS=true
 ```
+
+
+### GitHub OAuth
+
+In GitHub Developer Settings, create an OAuth App for production:
+
+- Homepage URL: `https://said-diplom.ru`
+- Authorization callback URL: `https://said-diplom.ru/api/auth/oauth/github/callback`
+
+Set these backend environment variables in production:
+
+```dotenv
+GITHUB_CLIENT_ID=CHANGE_ME
+GITHUB_CLIENT_SECRET=CHANGE_ME
+GITHUB_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/github/callback
+```
+
+GitHub sign-in uses the same JWT OAuth flow as Google and Yandex. Next.js stores the returned JWT only in the httpOnly `access_token` cookie.
 
 Keep internal Docker URLs internal. `backend:8000` is only the private Docker service URL for server-to-server calls and must never appear in browser-facing pages or emails:
 

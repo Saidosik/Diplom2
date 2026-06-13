@@ -6,7 +6,7 @@ import createLaravelApi from '@/lib/http/laravel';
 import { getOAuthStateCookieName } from '@/lib/auth/constants';
 import { buildSiteUrl } from '@/lib/site-url';
 
-const allowedProviders = ['google', 'yandex'];
+const allowedProviders = ['google', 'yandex', 'github'];
 
 type Params = {
   params: Promise<{

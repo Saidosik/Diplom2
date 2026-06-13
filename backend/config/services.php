@@ -47,6 +47,12 @@ return [
         'redirect' => env('YANDEX_REDIRECT_URI'),
     ],
 
+    'github' => [
+        'client_id' => env('GITHUB_CLIENT_ID'),
+        'client_secret' => env('GITHUB_CLIENT_SECRET'),
+        'redirect' => env('GITHUB_REDIRECT_URI'),
+    ],
+
 
     // Backward-compatible alias. New AI settings live in config/ai.php
     // and are consumed through the Laravel AI SDK.
