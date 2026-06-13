@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Notifications\VerifyEmailNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\URL;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use Tests\TestCase;
@@ -72,6 +73,51 @@ class AuthEmailVerificationTest extends TestCase
             ->assertOk();
     }
 
+    public function test_verification_notification_uses_public_url_branding_and_custom_copy(): void
+    {
+        Config::set('app.url', 'https://said-diplom.ru');
+        Config::set('app.env', 'production');
+        Config::set('auth.verification.expire', 10);
+        URL::forceRootUrl('https://said-diplom.ru');
+        URL::forceScheme('https');
+
+        $user = User::factory()->unverified()->create();
+        $mail = (new VerifyEmailNotification())->toMail($user);
+        $html = $mail->render();
+
+        $this->assertSame('Подтверждение email на платформе Вектор', $mail->subject);
+        $this->assertStringContainsString('https://said-diplom.ru/api/email/verify/' . $user->id . '/', $html);
+        $this->assertStringNotContainsString('http://backend' . ':8000', $html);
+        $this->assertStringNotContainsString('backend' . ':8000', $html);
+        $this->assertStringNotContainsString('localhost', $html);
+        $this->assertStringNotContainsString('127.0.0.1', $html);
+        $this->assertStringNotContainsString('YOUR_VPS_' . 'IP', $html);
+        $this->assertStringNotContainsString('VPS_PUBLIC_' . 'IP', $html);
+        $this->assertStringContainsString('команда платформы Вектор', $html);
+        $this->assertStringContainsString('Ссылка действительна в течение 10 минут', $html);
+        $this->assertStringNotContainsString('Regards' . ', ' . 'Vector', $html);
+        $this->assertStringNotContainsString('Regards' . ',', $html);
+        $this->assertStringNotContainsString("If you're having trouble clicking", $html);
+
+        preg_match('/https:\/\/said-diplom\.ru\/api\/email\/verify\/[^\s"<>]+/', $html, $matches);
+        $this->assertNotEmpty($matches);
+
+        $this->getJson(html_entity_decode($matches[0]))->assertOk()->assertJsonPath('email_verified', true);
+    }
+
+    public function test_verification_notification_expiration_is_configured_for_ten_minutes(): void
+    {
+        Config::set('auth.verification.expire', 10);
+        $user = User::factory()->unverified()->create();
+
+        $mail = (new VerifyEmailNotification())->toMail($user);
+        $html = html_entity_decode($mail->render());
+
+        preg_match('/[?&]expires=(\d+)/', $html, $matches);
+        $this->assertNotEmpty($matches);
+        $this->assertEqualsWithDelta(now()->addMinutes(10)->timestamp, (int) $matches[1], 2);
+    }
+
     public function test_resend_verification_email_works_for_unverified_user(): void
     {
         Notification::fake();
@@ -98,7 +144,7 @@ class AuthEmailVerificationTest extends TestCase
     public function test_invalid_verification_hash_does_not_confirm_email(): void
     {
         $user = User::factory()->unverified()->create();
-        $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), [
+        $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes((int) config('auth.verification.expire', 10)), [
             'id' => $user->id,
             'hash' => sha1('wrong@example.com'),
         ]);
@@ -126,7 +172,7 @@ class AuthEmailVerificationTest extends TestCase
     {
         $first = User::factory()->unverified()->create();
         $second = User::factory()->unverified()->create();
-        $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), [
+        $url = URL::temporarySignedRoute('verification.verify', now()->addMinutes((int) config('auth.verification.expire', 10)), [
             'id' => $second->id,
             'hash' => sha1($first->getEmailForVerification()),
         ]);
@@ -148,7 +194,7 @@ class AuthEmailVerificationTest extends TestCase
 
     private function verificationUrl(User $user): string
     {
-        return URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), [
+        return URL::temporarySignedRoute('verification.verify', now()->addMinutes((int) config('auth.verification.expire', 10)), [
             'id' => $user->id,
             'hash' => sha1($user->getEmailForVerification()),
         ]);

@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -89,11 +90,32 @@ class AppServiceProvider extends ServiceProvider
 
 
 
+        $this->configureProductionUrls();
+
         $this->configureRateLimiters();
 
         Event::listen(function (\SocialiteProviders\Manager\SocialiteWasCalled $event) {
             $event->extendSocialite('yandex', \SocialiteProviders\Yandex\Provider::class);
         });
+    }
+
+
+    private function configureProductionUrls(): void
+    {
+        $appUrl = (string) config('app.url');
+
+        if (app()->environment('production') && str_starts_with($appUrl, 'https://')) {
+            URL::forceRootUrl($appUrl);
+            URL::forceScheme('https');
+        }
+
+        Request::setTrustedProxies(
+            ['0.0.0.0/0', '::/0'],
+            Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+        );
     }
 
     private function configureRateLimiters(): void

@@ -47,8 +47,10 @@ Production URL values should remain domain-based:
 ```dotenv
 SITE_DOMAIN=said-diplom.ru
 SITE_URL=https://said-diplom.ru
+APP_NAME="Вектор"
 APP_URL=https://said-diplom.ru
 FRONTEND_URL=https://said-diplom.ru
+EMAIL_VERIFICATION_EXPIRE_MINUTES=10
 GOOGLE_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/google/callback
 YANDEX_REDIRECT_URI=https://said-diplom.ru/api/auth/oauth/yandex/callback
 REVERB_ALLOWED_ORIGINS=https://said-diplom.ru,https://www.said-diplom.ru
@@ -57,7 +59,7 @@ NEXT_PUBLIC_REVERB_PORT=443
 NEXT_PUBLIC_REVERB_FORCE_TLS=true
 ```
 
-Keep internal Docker URLs internal:
+Keep internal Docker URLs internal. `backend:8000` is only the private Docker service URL for server-to-server calls and must never appear in browser-facing pages or emails:
 
 ```dotenv
 LARAVEL_API_URL=http://backend:8000/api
@@ -108,7 +110,7 @@ For `https://SERVER_IP`, browsers can show a certificate warning before redirect
 
 ## Obsolete IP/Certbot flow
 
-Old instructions that replaced a placeholder IP or issued IP certificates with Certbot are obsolete. Do not set public URLs to a server IP, do not use `VPS_PUBLIC_IP` as the site URL, and do not use `/etc/letsencrypt` paths in production Nginx.
+Old instructions that replaced a placeholder IP or issued IP certificates with Certbot are obsolete. Do not set public URLs to a server IP, do not use `VPS_PUBLIC_` + `IP` as the site URL, and do not use `/etc/letsencrypt` paths in production Nginx.
 
 ## Network exposure
 
