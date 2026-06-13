@@ -4,31 +4,17 @@ services:
     env_file:
       - path: ./.env.production
         required: false
-    environment:
-      VPS_PUBLIC_IP: ${VPS_PUBLIC_IP}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
-      - certbot-etc:/etc/letsencrypt:ro
-      - certbot-webroot:/var/www/certbot:ro
+      - /etc/ssl/said-diplom/certificate.crt:/etc/ssl/said-diplom/certificate.crt:ro
+      - /etc/ssl/said-diplom/certificate.key:/etc/ssl/said-diplom/certificate.key:ro
+      - /etc/ssl/said-diplom/certificate_ca.crt:/etc/ssl/said-diplom/certificate_ca.crt:ro
     depends_on:
       frontend:
         condition: service_started
-    restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:latest
-    env_file:
-      - path: ./.env.production
-        required: false
-    volumes:
-      - certbot-etc:/etc/letsencrypt
-      - certbot-webroot:/var/www/certbot
-      - certbot-logs:/var/log/letsencrypt
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["trap exit TERM; while :; do sleep 1d & wait $${!}; done"]
     restart: unless-stopped
 
   frontend:
@@ -38,7 +24,7 @@ services:
       args:
         NEXT_PUBLIC_SITE_URL: ${SITE_URL}
         NEXT_PUBLIC_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-app-key}
-        NEXT_PUBLIC_REVERB_HOST: ${VPS_PUBLIC_IP}
+        NEXT_PUBLIC_REVERB_HOST: ${SITE_DOMAIN:-said-diplom.ru}
         NEXT_PUBLIC_REVERB_PORT: 443
         NEXT_PUBLIC_REVERB_FORCE_TLS: "true"
     env_file:
@@ -74,7 +60,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       REVERB_HOST: reverb
-      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL},https://www.said-diplom.ru
       SESSION_SECURE_COOKIE: "true"
     expose:
       - "8000"
@@ -111,7 +97,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       REVERB_HOST: reverb
-      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL},https://www.said-diplom.ru
       SESSION_SECURE_COOKIE: "true"
     command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=120
     depends_on:
@@ -142,7 +128,7 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       REVERB_HOST: reverb
-      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL},https://www.said-diplom.ru
       SESSION_SECURE_COOKIE: "true"
     command: sh -c 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     depends_on:
@@ -175,7 +161,7 @@ services:
       REVERB_SERVER_HOST: 0.0.0.0
       REVERB_SERVER_PORT: 8080
       REVERB_HOST: reverb
-      REVERB_ALLOWED_ORIGINS: ${SITE_URL}
+      REVERB_ALLOWED_ORIGINS: ${SITE_URL},https://www.said-diplom.ru
     command: php artisan reverb:start --host=0.0.0.0 --port=8080 --no-interaction
     expose:
       - "8080"
@@ -219,9 +205,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  certbot-etc:
-  certbot-webroot:
-  certbot-logs:
   postgres-data:
   redis-data:
   backend-storage:
