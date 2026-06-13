@@ -4,29 +4,55 @@ map $http_upgrade $connection_upgrade {
 }
 
 server {
-    listen 80;
-    listen [::]:80;
-    server_name ${VPS_PUBLIC_IP};
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-        try_files $uri =404;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
+    return 301 https://said-diplom.ru$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name ${VPS_PUBLIC_IP};
+    server_name www.said-diplom.ru;
 
-    ssl_certificate /etc/letsencrypt/live/${VPS_PUBLIC_IP}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${VPS_PUBLIC_IP}/privkey.pem;
+    ssl_certificate /etc/ssl/said-diplom/certificate.crt;
+    ssl_certificate_key /etc/ssl/said-diplom/certificate.key;
+    ssl_trusted_certificate /etc/ssl/said-diplom/certificate_ca.crt;
     ssl_session_timeout 1d;
-    ssl_session_cache shared:VektorSSL:10m;
+    ssl_session_cache shared:SaidDiplomSSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    return 301 https://said-diplom.ru$request_uri;
+}
+
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name _;
+
+    ssl_certificate /etc/ssl/said-diplom/certificate.crt;
+    ssl_certificate_key /etc/ssl/said-diplom/certificate.key;
+    ssl_trusted_certificate /etc/ssl/said-diplom/certificate_ca.crt;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SaidDiplomSSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    return 301 https://said-diplom.ru$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name said-diplom.ru;
+
+    ssl_certificate /etc/ssl/said-diplom/certificate.crt;
+    ssl_certificate_key /etc/ssl/said-diplom/certificate.key;
+    ssl_trusted_certificate /etc/ssl/said-diplom/certificate_ca.crt;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SaidDiplomSSL:10m;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
 
@@ -34,11 +60,31 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-        try_files $uri =404;
+    location /app/ {
+        proxy_pass http://reverb:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
+    location /apps/ {
+        proxy_pass http://reverb:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
 
     location /api/laravel/ai/chat/stream {
         proxy_pass http://frontend:3000;
@@ -56,9 +102,6 @@ server {
         add_header X-Accel-Buffering no always;
     }
 
-    # Public Laravel storage files (avatars, demo media, uploaded public assets).
-    # The files live behind backend/public/storage -> storage/app/public, so proxy
-    # /storage/* to Laravel instead of letting Next.js handle these URLs.
     location /storage/ {
         proxy_pass http://backend:8000;
         proxy_http_version 1.1;
@@ -71,24 +114,9 @@ server {
         proxy_send_timeout 300s;
     }
 
-    # Keep Laravel API private: browser requests are served by Next.js BFF routes only.
+    # Keep Laravel API private: browser /api/* requests are served by Next.js BFF routes.
     location / {
         proxy_pass http://frontend:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    # Optional Reverb/websocket proxy on the same public origin. Reverb is not exposed as a host port.
-    location /app/ {
-        proxy_pass http://reverb:8080;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;

@@ -1,15 +1,8 @@
+# Obsolete Certbot/IP bootstrap template.
+# Production uses deploy/nginx/default.conf.template and host-mounted certificates from /etc/ssl/said-diplom/.
 server {
-    listen 80;
-    listen [::]:80;
-    server_name ${VPS_PUBLIC_IP};
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-        try_files $uri =404;
-    }
-
-    location / {
-        return 200 'ACME bootstrap for ${VPS_PUBLIC_IP}\n';
-        add_header Content-Type text/plain;
-    }
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 301 https://said-diplom.ru$request_uri;
 }
