@@ -204,7 +204,7 @@ export function LoginForm() {
                         Нет аккаунта? <Link href="?mode=register" className="text-primary">Зарегистрироваться</Link>
                     </p>
                     <Link href={'/forgot-password'} className="text-primary">Забыли пароль?</Link>
-                    <AuthSocialButtons providers={['google', 'yandex']} />
+                    <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
             </CardFooter>

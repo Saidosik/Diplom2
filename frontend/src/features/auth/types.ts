@@ -82,5 +82,5 @@ export type AuthActionResponse = {
   email?: string
 }
 
-export type AllowedAuthProviders = "yandex" | "google"
+export type AllowedAuthProviders = "yandex" | "google" | "github"
 export type AuthProviders = AllowedAuthProviders[]

@@ -16,7 +16,7 @@ use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 
 class SocialAuthController extends Controller
 {
-    private array $allowedProviders = ['google', 'yandex'];
+    private array $allowedProviders = ['google', 'yandex', 'github'];
 
     public function redirectUrl(Request $request, string $provider): JsonResponse
     {
@@ -29,6 +29,7 @@ class SocialAuthController extends Controller
         $state = $request->query('state');
 
         $socialite = Socialite::driver($provider)->stateless();
+        $this->applyProviderScopes($provider, $socialite);
 
         if ($state) {
             $socialite->with([
@@ -50,6 +51,7 @@ class SocialAuthController extends Controller
         }
 
         $driver = Socialite::driver($provider);
+        $this->applyProviderScopes($provider, $driver);
 
         /** @var \Laravel\Socialite\Two\AbstractProvider $driver */
         $socialUser = $driver->stateless()->user();
@@ -64,19 +66,27 @@ class SocialAuthController extends Controller
         ]);
     }
 
+    private function applyProviderScopes(string $provider, mixed $socialite): void
+    {
+        if ($provider === 'github' && method_exists($socialite, 'scopes')) {
+            $socialite->scopes(['read:user', 'user:email']);
+        }
+    }
+
     private function findOrCreateUser(string $provider, mixed $socialUser): User
     {
         Log::info("Данные от провайдера [$provider]:", [
-            'id'     => $socialUser->getId(),
-            'email'  => $socialUser->getEmail(),
-            'name'   => $socialUser->getName(),
-            'token'  => $socialUser->token,
+            'id' => $socialUser->getId(),
+            'email' => $socialUser->getEmail(),
+            'name' => $socialUser->getName(),
+            'nickname' => $socialUser->getNickname(),
+            'token' => $socialUser->token,
         ]);
         Log::info("id [$provider]:", [
-            'id'     => $socialUser->getId(),
+            'id' => $socialUser->getId(),
         ]);
-        $providerId =  $socialUser->getId();
 
+        $providerId = $socialUser->getId();
 
         $socialAccount = SocialAccount::query()
             ->where('provider', $provider)
@@ -84,7 +94,17 @@ class SocialAuthController extends Controller
             ->first();
 
         if ($socialAccount) {
-            return $socialAccount->user;
+            $user = $socialAccount->user;
+            $email = $socialUser->getEmail();
+
+            $socialAccount->update([
+                'email' => $email ?: $socialAccount->email,
+                'name' => $socialUser->getName() ?: $socialUser->getNickname() ?: $socialAccount->name,
+                'avatar' => $socialUser->getAvatar() ?: $socialAccount->avatar,
+            ]);
+            $this->fillGithubUrl($user, $provider, $socialUser);
+
+            return $user;
         }
 
         $email = $socialUser->getEmail();
@@ -111,6 +131,8 @@ class SocialAuthController extends Controller
             $user->markEmailAsVerified();
         }
 
+        $this->fillGithubUrl($user, $provider, $socialUser);
+
         SocialAccount::query()->create([
             'user_id' => $user->id,
             'provider' => $provider,
@@ -121,5 +143,57 @@ class SocialAuthController extends Controller
         ]);
 
         return $user;
+    }
+
+    private function fillGithubUrl(User $user, string $provider, mixed $socialUser): void
+    {
+        if ($provider !== 'github') {
+            return;
+        }
+
+        $login = $this->sanitizeGithubLogin($socialUser->getNickname());
+
+        if (! $login && is_array($socialUser->user ?? null)) {
+            $login = $this->sanitizeGithubLogin($socialUser->user['login'] ?? null);
+        }
+
+        if (! $login) {
+            return;
+        }
+
+        $githubUrl = "https://github.com/{$login}";
+        $currentUrl = trim((string) $user->github_url);
+
+        if ($currentUrl === '' || $this->isSameGithubProfileUrl($currentUrl, $login)) {
+            $user->forceFill(['github_url' => $githubUrl])->save();
+        }
+    }
+
+    private function sanitizeGithubLogin(?string $login): ?string
+    {
+        if (! is_string($login)) {
+            return null;
+        }
+
+        $login = trim($login);
+
+        return preg_match('/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/', $login) === 1
+            ? $login
+            : null;
+    }
+
+    private function isSameGithubProfileUrl(string $url, string $login): bool
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts)) {
+            return false;
+        }
+
+        $host = strtolower($parts['host'] ?? '');
+        $pathLogin = trim($parts['path'] ?? '', '/');
+
+        return in_array($host, ['github.com', 'www.github.com'], true)
+            && strcasecmp($pathLogin, $login) === 0;
     }
 }
