@@ -91,7 +91,7 @@ Route::post('/forgot-password', [PasswordController::class, 'sendResetLink'])->m
 Route::post('/reset-password', [PasswordController::class, 'reset'])->middleware('throttle:auth');
 
 Route::get('/email/verify/{id}/{hash}', [VerifyEmailAcountController::class, 'verify'])
-    ->middleware(['signed', 'throttle:auth'])
+    ->middleware(['signed:relative', 'throttle:auth'])
     ->name('verification.verify');
 
 Route::middleware(['jwt', 'email_verified'])->group(function () {

@@ -68,7 +68,7 @@ class SocialAuthController extends Controller
 
     private function applyProviderScopes(string $provider, mixed $socialite): void
     {
-        if ($provider === 'github' && method_exists($socialite, 'scopes')) {
+        if ($provider === 'github') {
             $socialite->scopes(['read:user', 'user:email']);
         }
     }

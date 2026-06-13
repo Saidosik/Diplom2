@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
 
         DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
         DB::statement('CREATE EXTENSION IF NOT EXISTS vector');
