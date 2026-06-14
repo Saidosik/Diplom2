@@ -1,8 +1,18 @@
 import { browserApi } from "@/lib/http/browser"
-import type { UserFile, UserFileCollection } from "./types"
+import type { UserFile, UserFileCollection, UserFilePreview } from "./types"
 
-export async function getMyFiles(params?: { q?: string; visibility?: string; kind?: string; page?: number; per_page?: number }) {
+export async function getMyFiles(params?: { q?: string; visibility?: string; kind?: string; sort?: string; page?: number; per_page?: number }) {
     const response = await browserApi.get<UserFileCollection>("/laravel/me/files", { params })
+    return response.data
+}
+
+export async function getMyFile(id: number) {
+    const response = await browserApi.get<{ data: UserFile }>(`/laravel/me/files/${id}`)
+    return response.data.data
+}
+
+export async function getMyFileTextPreview(id: number) {
+    const response = await browserApi.get<UserFilePreview>(`/laravel/me/files/${id}/preview`)
     return response.data
 }
 
