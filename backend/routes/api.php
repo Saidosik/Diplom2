@@ -111,6 +111,8 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::get('/me/files', [UserFileController::class, 'index']);
     Route::post('/me/files', [UserFileController::class, 'store'])->middleware('throttle:uploads');
+    Route::get('/me/files/{userFile}', [UserFileController::class, 'show']);
+    Route::get('/me/files/{userFile}/preview', [UserFileController::class, 'preview'])->middleware('throttle:uploads');
     Route::match(['put', 'patch'], '/me/files/{userFile}', [UserFileController::class, 'update']);
     Route::get('/me/files/{userFile}/download', [UserFileController::class, 'download'])->middleware('throttle:uploads');
     Route::delete('/me/files/{userFile}', [UserFileController::class, 'destroy']);
