@@ -88,6 +88,11 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmailContrac
         return $this->hasMany(UserFile::class, 'user_id');
     }
 
+    public function userFileFolders(): HasMany
+    {
+        return $this->hasMany(UserFileFolder::class, 'user_id');
+    }
+
     public function codeSnippets(): HasMany
     {
         return $this->hasMany(CodeSnippet::class, 'user_id');
