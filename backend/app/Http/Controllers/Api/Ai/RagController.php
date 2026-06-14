@@ -317,7 +317,7 @@ class RagController extends Controller
             'exit_code' => ['nullable', 'integer'],
             'execution_time' => ['nullable', 'numeric'],
             'memory_usage' => ['nullable', 'numeric'],
-            'intent' => ['nullable', Rule::in(['explain_result', 'explain_error', 'find_bug', 'optimize', 'write_tests'])],
+            'intent' => ['nullable', Rule::in(['explain_code', 'explain_result', 'explain_error', 'find_bug', 'optimize', 'write_tests'])],
             'backend_runner' => ['nullable', 'string', 'max:120'],
             'backend_execution_note' => ['nullable', 'string', 'max:500'],
             'query' => ['nullable', 'string', 'max:500'],
@@ -340,17 +340,22 @@ class RagController extends Controller
             'exit_code' => $data['exit_code'] ?? $run?->exit_code ?? null,
             'execution_time' => $data['execution_time'] ?? $run?->execution_time ?? null,
             'memory_usage' => $data['memory_usage'] ?? $run?->memory_usage ?? null,
-            'intent' => $data['intent'] ?? 'explain_result',
-            'backend_runner' => $data['backend_runner'] ?? 'Docker sandbox / queue worker / RunPlaygroundCodeJob',
-            'backend_execution_note' => $data['backend_execution_note'] ?? 'Код запускается на backend в Docker sandbox через очередь Laravel. Browser не выполняет код напрямую.',
+            'intent' => $data['intent'] ?? 'explain_code',
+            'backend_runner' => $data['backend_runner'] ?? 'Laravel queue + Docker sandbox',
+            'backend_execution_note' => $data['backend_execution_note'] ?? 'Код выполняется на backend через Laravel queue job и Docker sandbox. Browser не выполняет код напрямую.',
         ];
 
-        $query = trim(($data['query'] ?? '') . ' ' . $runContext['language'] . ' ' . ($runContext['intent'] ?? '') . ' ' . mb_substr($runContext['stderr'] ?: $runContext['stdout'] ?: $runContext['code'], 0, 700));
+        $hasRun = ! empty($runContext['run_id']) || ! empty($runContext['run_status']);
+        $intent = (string) ($runContext['intent'] ?? 'explain_code');
+        $rag = ['data' => [], 'meta' => []];
 
-        $rag = $search->search($query, [
-            'type' => 'all',
-            'limit' => 6,
-        ]);
+        if ($hasRun || in_array($intent, ['explain_code', 'optimize', 'write_tests'], true)) {
+            $query = trim(($data['query'] ?? '') . ' ' . $runContext['language'] . ' ' . $intent . ' ' . mb_substr($runContext['stderr'] ?: $runContext['stdout'] ?: $runContext['code'], 0, 500));
+            $rag = $search->search($query, [
+                'type' => 'all',
+                'limit' => 4,
+            ]);
+        }
 
         return response()->json([
             'answer' => $answers->codeExplanation($runContext, $rag['data'] ?? []),

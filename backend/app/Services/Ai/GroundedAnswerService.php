@@ -51,10 +51,10 @@ class GroundedAnswerService
         $stdout = (string) ($runContext['stdout'] ?? '');
         $status = (string) ($runContext['run_status'] ?? 'no_run');
         $exitCode = $runContext['exit_code'] ?? null;
-        $intent = (string) ($runContext['intent'] ?? 'explain_result');
+        $intent = (string) ($runContext['intent'] ?? 'explain_code');
 
         $lines = [];
-        $lines[] = "1. Краткий вывод";
+        $lines[] = "Кратко:";
 
         if (in_array($status, ['queued', 'running'], true)) {
             $lines[] = 'Результата запуска пока нет: задача ещё в очереди или выполняется в Docker sandbox.';
@@ -67,12 +67,12 @@ class GroundedAnswerService
         }
 
         $lines[] = '';
-        $lines[] = '2. Что произошло';
+        $lines[] = 'Что вижу:';
         $lines[] = 'Код запускается на backend через Laravel queue job и Docker sandbox, а не в браузере.';
         $lines[] = 'Статус: `' . ($status ?: 'unknown') . '`, exit code: `' . ($exitCode ?? '—') . '`, intent: `' . $intent . '`.';
 
         $lines[] = '';
-        $lines[] = '3. Ошибка/проблема, если есть';
+        $lines[] = 'Проблема:';
         $lines[] = $stderr !== '' ? 'STDERR: `' . Str::limit(trim($stderr), 260) . '`' : 'Явный STDERR не передан.';
 
         $lower = Str::lower($stderr . "\n" . (string) ($runContext['code'] ?? ''));
@@ -89,7 +89,7 @@ class GroundedAnswerService
         }
 
         $lines[] = '';
-        $lines[] = '4. Как исправить или улучшить';
+        $lines[] = 'Что сделать:';
         $lines[] = $hints === [] ? 'Сопоставь код, STDIN и фактический вывод; если результата ещё нет, дождись завершения запуска.' : implode("\n", array_map(fn (string $hint) => '- ' . $hint, $hints));
 
         if ($intent === 'optimize') {
@@ -97,7 +97,7 @@ class GroundedAnswerService
         }
 
         $lines[] = '';
-        $lines[] = '5. Проверочные входные данные, если полезно';
+        $lines[] = 'Проверка:';
         $lines[] = $intent === 'write_tests' ? 'Подготовь наборы: пустой ввод, минимальный ввод, типичный ввод и граничные значения.' : 'Добавь минимальный пример STDIN и ожидаемый STDOUT для проверки.';
 
         if ($sources !== []) {
@@ -245,7 +245,8 @@ class GroundedAnswerService
             'Отвечай на русском языке.',
             'Анализируй код только в рамках переданного контекста: название, язык, stdin, stdout, stderr, статус запуска, exit code, время, память и способ запуска.',
             'Код выполняется на backend через Laravel queue job и Docker sandbox, а не в браузере.',
-            'Не утверждай, что код успешно выполнился, если run_status queued/running или stdout/stderr ещё пустые.',
+            'Не утверждай, что код успешно выполнился, если run_status отсутствует, queued или running.',
+            'Если запуска ещё нет, разбирай только код и явно скажи, что фактического результата выполнения нет.',
             'Если задача ещё в очереди или выполняется, скажи, что результата запуска пока нет, и предложи дождаться завершения.',
             'Если есть stderr или exit_code != 0, сначала объясни ошибку.',
             'Если stderr нет и exit_code = 0, объясни результат и проверь, соответствует ли вывод ожидаемому.',
@@ -254,14 +255,14 @@ class GroundedAnswerService
             'Не выдумывай stdout/stderr, которого нет.',
             'Не предлагай опасные действия: сетевые запросы, доступ к файловой системе вне sandbox, запуск системных команд, секреты или токены.',
             'Если контекста недостаточно, честно скажи, чего не хватает.',
-            'Формат ответа: 1. Краткий вывод 2. Что произошло 3. Ошибка/проблема, если есть 4. Как исправить или улучшить 5. Проверочные входные данные, если полезно',
+            'Формат ответа: Кратко: Что вижу: Проблема: Что сделать: Проверка:',
         ]);
 
         $language = (string) ($runContext['language'] ?? 'code');
         $prompt = "Контекст запуска:\n"
             . 'title: ' . ($runContext['title'] ?? '—') . "\n"
             . 'language: ' . $language . "\n"
-            . 'intent: ' . ($runContext['intent'] ?? 'explain_result') . "\n"
+            . 'intent: ' . ($runContext['intent'] ?? 'explain_code') . "\n"
             . 'run_status: ' . ($runContext['run_status'] ?? '—') . "\n"
             . 'exit_code: ' . ($runContext['exit_code'] ?? '—') . "\n"
             . 'execution_time: ' . ($runContext['execution_time'] ?? '—') . "\n"
