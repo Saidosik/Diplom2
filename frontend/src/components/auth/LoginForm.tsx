@@ -101,9 +101,10 @@ export function LoginForm() {
     return (
 
 
-        <Card className="w-full sm:max-w-md">
+        <>
+        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
             <CardHeader>
-                <CardTitle><h1>Вход</h1></CardTitle>
+                <CardTitle><h1>Вход в Вектор</h1></CardTitle>
 
             </CardHeader>
             <CardContent>
@@ -165,7 +166,7 @@ export function LoginForm() {
                                             />
                                             <button
                                                 type="button"
-                                                className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                                                className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
                                                 onClick={() => setShowPassword(!showPassword)}
                                             >
                                                 {showPassword ? (
@@ -186,7 +187,7 @@ export function LoginForm() {
             <CardFooter>
 
                 <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="LoginForm" className="mx-auto">
+                    <Button type="submit" disabled={isSubmitting} form="LoginForm" className="w-full">
                         {
                             isSubmitting ? "Выполняется вход" : "Авторизоваться"
                         }
@@ -200,18 +201,17 @@ export function LoginForm() {
                         </div>
                     )}
                     
-                    <p>
-                        Нет аккаунта? <Link href="?mode=register" className="text-primary">Зарегистрироваться</Link>
-                    </p>
-                    <Link href={'/forgot-password'} className="text-primary">Забыли пароль?</Link>
+                    <Link href={'/forgot-password'} className="text-center text-sm text-primary">Забыли пароль?</Link>
                     <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
             </CardFooter>
 
         </Card>
-
-
+        <p className="mt-4 text-center text-sm text-slate-400">
+            Нет аккаунта? <Link href="?mode=register" className="text-primary">Зарегистрироваться</Link>
+        </p>
+        </>
 
     )
 }
