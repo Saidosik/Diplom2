@@ -863,6 +863,55 @@ function UploadDialog({
                         <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
                     </div>
 
+                    {selectedFile ? (
+                        <div className="rounded-2xl border bg-card/60 p-3 text-sm">
+                            <div className="break-words font-medium">{selectedFile.name}</div>
+                            <div className="mt-1 text-muted-foreground">{sizeLabel(selectedFile.size)} · {selectedFile.type || "тип не определён"}</div>
+                        </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                        <Label>Название</Label>
+                        <Input value={title} onChange={(event) => onTitleChange(event.target.value)} placeholder="Например: demo-report.pdf" />
+                        <p className="text-xs text-muted-foreground">Если оставить пустым, название будет взято из имени файла.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Доступ</Label>
+                        <Select value={visibility} onValueChange={(value) => onVisibilityChange(value as "private" | "public")}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="private">Приватный</SelectItem>
+                                <SelectItem value="public">Публичный</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Папка</Label>
+                        <Select value={folderId ? String(folderId) : "none"} onValueChange={(value) => onFolderChange(value === "none" ? null : Number(value))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Без папки</SelectItem>
+                                {folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {visibility === "public" ? (
+                        <Alert>
+                            <ShieldAlert className="size-4" />
+                            <AlertDescription>{PUBLIC_WARNING}</AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                        <LimitChip label="Максимум файла" value={meta ? sizeLabel(meta.max_file_bytes) : "—"} />
+                        <LimitChip label="Свободно места" value={meta ? sizeLabel(freeBytes) : "—"} />
+                        <LimitChip label="Лимит файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} />
+                        <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
+                    </div>
+
                     {visibility === "public" ? (
                         <Alert>
                             <ShieldAlert className="size-4" />
@@ -961,16 +1010,14 @@ function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, on
 }
 
 function FullscreenDragOverlay({ visible }: { visible: boolean }) {
-    if (!visible) return null
-
-    return (
+    return visible ? (
         <div className="pointer-events-none fixed inset-3 z-[55] flex items-center justify-center rounded-4xl border border-dashed border-primary/70 bg-background/45 p-4 text-center shadow-2xl backdrop-blur-[1px]">
             <div className="rounded-3xl border bg-card/90 px-6 py-5 text-foreground shadow-xl">
                 <UploadCloud className="mx-auto mb-3 size-10 text-primary" />
                 <div className="font-medium">Отпустите файл в любом месте, чтобы выбрать его</div>
             </div>
         </div>
-    )
+    ) : null
 }
 
 function LimitChip({ label, value }: { label: string; value: string }) {
