@@ -93,7 +93,7 @@ export function PasswordResetForm({
     })
 
     return (
-        <Card className="w-full sm:max-w-md">
+        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
             <CardHeader>
                 <CardTitle>
                     <h1>Новый пароль</h1>

@@ -1,5 +1,6 @@
 "use client"
 import * as React from "react"
+import Link from "next/link"
 import { useForm } from "@tanstack/react-form"
 
 import { Button } from "@/components/ui/button"
@@ -83,10 +84,10 @@ export function ForgotPasswordForm() {
     return (
 
 
-        <Card className="w-full sm:max-w-md ">
+        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
             <CardHeader>
-                <CardTitle><h1>Сброс Пароля</h1></CardTitle>
-                <CardDescription className="w-100">Мы вышлем вам на почту письмо, перейдя по ссылке вы сможете сбросить пароль или войдите используя сторонние сервисы</CardDescription>
+                <CardTitle><h1>Восстановление пароля</h1></CardTitle>
+                <CardDescription className="w-100">Укажите email аккаунта — отправим ссылку для сброса пароля.</CardDescription>
             </CardHeader>
             <CardContent>
                 <form
@@ -126,9 +127,9 @@ export function ForgotPasswordForm() {
             <CardFooter>
 
                 <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="ForgotPasswordForm" className="mx-auto">
+                    <Button type="submit" disabled={isSubmitting} form="ForgotPasswordForm" className="w-full">
                         {
-                            isSubmitting ? "Отправка" : "отправить"
+                            isSubmitting ? "Отправляем" : "Отправить ссылку"
                         }
                         {
                             isSubmitting ? <LoaderCircle className="animate-spin" /> : ''
@@ -144,6 +145,10 @@ export function ForgotPasswordForm() {
                             {success}
                         </div>
                     )}
+
+                    <p className="text-center text-sm text-muted-foreground">
+                        Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
+                    </p>
 
                     <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>

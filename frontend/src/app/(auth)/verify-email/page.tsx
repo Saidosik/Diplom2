@@ -89,9 +89,9 @@ function VerifyEmail() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="w-full sm:max-w-lg"
+            className="w-full"
         >
-            <Card className="border-primary/10 bg-card/95 shadow-xl shadow-primary/5 backdrop-blur">
+            <Card className="rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-primary/10 text-primary">
                         {isChecking ? <LoaderCircle className="size-6 animate-spin" /> : <MailCheck className="size-6" />}
@@ -145,7 +145,7 @@ function VerifyEmail() {
 export default function VerifyEmailPage() {
     return (
         <Suspense fallback={
-            <Card className="w-full sm:max-w-md">
+            <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-2xl border bg-background">
                         <LoaderCircle className="size-5 animate-spin text-muted-foreground" />

@@ -92,9 +92,9 @@ export function RegisterForm() {
     return (
 
 
-        <Card className="w-full sm:max-w-md">
+        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
             <CardHeader>
-                <CardTitle><h1>Регистрация</h1></CardTitle>
+                <CardTitle><h1>Создайте аккаунт</h1></CardTitle>
 
             </CardHeader>
             <CardContent>
@@ -266,7 +266,7 @@ export function RegisterForm() {
             <CardFooter>
 
                 <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="RegisterForm" className="mx-auto">
+                    <Button type="submit" disabled={isSubmitting} form="RegisterForm" className="w-full">
                         Регистрация
                         {
                             isSubmitting ? <LoaderCircle className="animate-spin" /> : ''
@@ -277,7 +277,7 @@ export function RegisterForm() {
                             {error}
                         </div>
                     )}
-                    <p>
+                    <p className="text-center text-sm text-muted-foreground">
                         Уже есть аккаунт? <Link href="?mode=login" className="text-primary">Войти</Link>
                     </p>
 

@@ -101,9 +101,9 @@ export function LoginForm() {
     return (
 
 
-        <Card className="w-full sm:max-w-md">
+        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
             <CardHeader>
-                <CardTitle><h1>Вход</h1></CardTitle>
+                <CardTitle><h1>Вход в Вектор</h1></CardTitle>
 
             </CardHeader>
             <CardContent>
@@ -186,7 +186,7 @@ export function LoginForm() {
             <CardFooter>
 
                 <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="LoginForm" className="mx-auto">
+                    <Button type="submit" disabled={isSubmitting} form="LoginForm" className="w-full">
                         {
                             isSubmitting ? "Выполняется вход" : "Авторизоваться"
                         }
@@ -200,10 +200,10 @@ export function LoginForm() {
                         </div>
                     )}
                     
-                    <p>
+                    <p className="text-center text-sm text-muted-foreground">
                         Нет аккаунта? <Link href="?mode=register" className="text-primary">Зарегистрироваться</Link>
                     </p>
-                    <Link href={'/forgot-password'} className="text-primary">Забыли пароль?</Link>
+                    <Link href={'/forgot-password'} className="text-center text-sm text-primary">Забыли пароль?</Link>
                     <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
