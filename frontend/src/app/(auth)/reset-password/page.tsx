@@ -29,7 +29,7 @@ export default async function ResetPasswordPage({
 
     if (!hasValidParams) {
         return (
-            <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+            <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
                 <CardHeader>
                     <CardTitle>Некорректная ссылка</CardTitle>
                     <CardDescription>

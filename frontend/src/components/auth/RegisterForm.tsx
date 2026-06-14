@@ -92,7 +92,8 @@ export function RegisterForm() {
     return (
 
 
-        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+        <>
+        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
             <CardHeader>
                 <CardTitle><h1>Создайте аккаунт</h1></CardTitle>
 
@@ -187,7 +188,7 @@ export function RegisterForm() {
                                             />
                                             <button
                                                 type="button"
-                                                className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                                                className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
                                                 onClick={() => setShowPassword(!showPassword)}
                                             >
                                                 {showPassword ? (
@@ -248,7 +249,7 @@ export function RegisterForm() {
                                                 onCheckedChange={(checked) => field.handleChange(checked === true)}
                                                 aria-invalid={isInvalid}
                                             />
-                                            <label htmlFor={field.name} className="text-sm leading-5 text-muted-foreground">
+                                            <label htmlFor={field.name} className="text-sm leading-5 text-slate-400">
                                                 Я согласен с{" "}
                                                 <Link href="/privacy-policy" className="font-medium text-primary underline-offset-4 hover:underline">
                                                     политикой конфиденциальности данных
@@ -277,17 +278,16 @@ export function RegisterForm() {
                             {error}
                         </div>
                     )}
-                    <p className="text-center text-sm text-muted-foreground">
-                        Уже есть аккаунт? <Link href="?mode=login" className="text-primary">Войти</Link>
-                    </p>
-
                     <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
             </CardFooter>
 
         </Card>
-
+        <p className="mt-4 text-center text-sm text-slate-400">
+            Уже есть аккаунт? <Link href="?mode=login" className="text-primary">Войти</Link>
+        </p>
+        </>
 
     )
 }

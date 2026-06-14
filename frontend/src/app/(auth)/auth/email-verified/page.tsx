@@ -42,11 +42,11 @@ function EmailVerifiedContent() {
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="w-full"
         >
-            <Card className="rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+            <Card className="rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-background">
                         {isLoading ? (
-                            <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
+                            <LoaderCircle className="size-6 animate-spin text-slate-400" />
                         ) : verified ? (
                             <CheckCircle2 className="size-6 text-emerald-500" />
                         ) : (
@@ -82,7 +82,7 @@ export default function EmailVerifiedPage() {
         <Suspense fallback={
             <Card className="w-full">
                 <CardHeader className="text-center">
-                    <LoaderCircle className="mx-auto size-5 animate-spin text-muted-foreground" />
+                    <LoaderCircle className="mx-auto size-5 animate-spin text-slate-400" />
                     <CardTitle>Загрузка</CardTitle>
                     <CardDescription>Обновляем статус аккаунта.</CardDescription>
                 </CardHeader>

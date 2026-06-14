@@ -84,10 +84,11 @@ export function ForgotPasswordForm() {
     return (
 
 
-        <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+        <>
+        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
             <CardHeader>
                 <CardTitle><h1>Восстановление пароля</h1></CardTitle>
-                <CardDescription className="w-100">Укажите email аккаунта — отправим ссылку для сброса пароля.</CardDescription>
+                <CardDescription className="w-100 text-slate-400">Укажите email аккаунта — отправим ссылку для сброса пароля.</CardDescription>
             </CardHeader>
             <CardContent>
                 <form
@@ -156,8 +157,10 @@ export function ForgotPasswordForm() {
             </CardFooter>
 
         </Card>
-
-
+        <p className="mt-4 text-center text-sm text-slate-400">
+            Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
+        </p>
+        </>
 
     )
 }

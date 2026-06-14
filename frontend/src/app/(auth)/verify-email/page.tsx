@@ -91,24 +91,24 @@ function VerifyEmail() {
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="w-full"
         >
-            <Card className="rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+            <Card className="rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-primary/10 text-primary">
                         {isChecking ? <LoaderCircle className="size-6 animate-spin" /> : <MailCheck className="size-6" />}
                     </div>
                     <CardTitle className="text-2xl">Подтвердите email</CardTitle>
-                    <CardDescription className="text-base">
+                    <CardDescription className="text-base text-slate-400">
                         Мы отправили письмо с подтверждением на ваш email.
                     </CardDescription>
                 </CardHeader>
 
                 <CardContent className="space-y-4 text-center">
-                    <div className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">
-                        <p className="text-muted-foreground">Адрес для подтверждения</p>
-                        <p className="mt-1 break-all font-medium text-foreground">{safeEmail}</p>
+                    <div className="rounded-xl border border-white/10 bg-[#0c1711] px-4 py-3 text-sm">
+                        <p className="text-slate-400">Адрес для подтверждения</p>
+                        <p className="mt-1 break-all font-medium text-white">{safeEmail}</p>
                     </div>
 
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-slate-400">
                         Перейдите по ссылке из письма. Проверьте папку “Спам”, если письмо не пришло.
                     </p>
                 </CardContent>
@@ -133,7 +133,7 @@ function VerifyEmail() {
                         Выйти
                     </Button>
 
-                    <Button asChild variant="link" className="text-muted-foreground">
+                    <Button asChild variant="link" className="text-slate-400">
                         <Link href="/auth?mode=login">Вернуться ко входу</Link>
                     </Button>
                 </CardFooter>
@@ -145,10 +145,10 @@ function VerifyEmail() {
 export default function VerifyEmailPage() {
     return (
         <Suspense fallback={
-            <Card className="w-full rounded-3xl border-primary/10 bg-card/95 shadow-2xl shadow-primary/10 backdrop-blur">
+            <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
                 <CardHeader className="text-center">
                     <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-2xl border bg-background">
-                        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                        <LoaderCircle className="size-5 animate-spin text-slate-400" />
                     </div>
                     <CardTitle>Загрузка</CardTitle>
                     <CardDescription>Подготавливаем страницу подтверждения email.</CardDescription>
