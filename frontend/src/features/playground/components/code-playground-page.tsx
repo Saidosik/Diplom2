@@ -14,13 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getMyFiles, getMyRuns, getMySnippets, getPlaygroundLanguages, getRun, getSnippet, previewUserFile, runCode } from "@/features/playground/api"
 import { MonacoCodeEditor } from "@/features/playground/components/monaco-code-editor"
 import { explainCodeWithAi } from "@/features/ai-rag/api"
 import { RagSourceCard } from "@/features/ai-rag/components/rag-source-card"
-import type { RagSource } from "@/features/ai-rag/types"
+import type { CodeExplainIntent, RagSource } from "@/features/ai-rag/types"
 import type { CodeRun, CodeSnippet, CodeTemplate, PlaygroundLanguage, UserFile } from "@/features/playground/types"
 
 const defaultCodeByLanguage: Record<string, string> = {
@@ -91,6 +92,7 @@ export function CodePlaygroundPage() {
     const [importDialog, setImportDialog] = useState<"files" | "snippets" | "runs" | "templates" | null>(null)
     const [currentSnippet, setCurrentSnippet] = useState<CodeSnippet | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const activeRunToastRef = useRef<string | number | null>(null)
 
     useEffect(() => {
         let mounted = true
@@ -141,6 +143,7 @@ export function CodePlaygroundPage() {
                 .then((latest) => {
                     if (cancelled) return
                     setRun(latest)
+                    updateRunToast(latest)
                     if (!["queued", "running"].includes(latest.status)) {
                         window.clearInterval(interval)
                     }
@@ -233,23 +236,31 @@ export function CodePlaygroundPage() {
     }
 
 
-    async function handleExplainCode() {
+    async function handleExplainCode(intent: CodeExplainIntent) {
         const currentRun = run
         setIsExplaining(true)
 
         try {
             const response = await explainCodeWithAi({
+                title,
                 run_id: currentRun?.id,
+                run_status: currentRun?.status ?? null,
+                exit_code: currentRun?.exit_code ?? null,
+                execution_time: currentRun?.execution_time ?? null,
+                memory_usage: currentRun?.memory_usage ?? null,
+                intent,
+                backend_runner: "Docker sandbox / queue worker / RunPlaygroundCodeJob",
+                backend_execution_note: "Код запускается на backend в Docker sandbox через очередь Laravel. Browser не выполняет код напрямую.",
                 language,
                 code,
                 stdin,
                 stdout: currentRun?.stdout ?? null,
                 stderr: currentRun?.stderr ?? null,
-                query: currentRun?.stderr ? "объясни ошибку запуска кода" : "проверь результат запуска кода",
+                query: intentQuery(intent, currentRun),
             })
             setAiExplanation(response.answer)
             setAiSources(response.sources ?? [])
-            toast.success("AI разобрал запуск кода")
+            toast.success("AI подготовил разбор")
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Не удалось получить AI-разбор")
         } finally {
@@ -257,13 +268,56 @@ export function CodePlaygroundPage() {
         }
     }
 
+    function intentQuery(intent: CodeExplainIntent, currentRun: CodeRun | null) {
+        const labels: Record<CodeExplainIntent, string> = {
+            explain_result: "объясни результат запуска кода",
+            explain_error: "объясни ошибку запуска кода",
+            find_bug: "найди проблему в коде",
+            optimize: "оптимизируй код без изменения поведения",
+            write_tests: "предложи тестовые входные данные",
+        }
+
+        return `${labels[intent]} ${currentRun?.status ?? "no_run"} ${currentRun?.stderr ?? currentRun?.stdout ?? ""}`
+    }
+
+    function updateRunToast(nextRun: CodeRun) {
+        const toastId = activeRunToastRef.current
+        if (!toastId) return
+
+        if (["queued", "running"].includes(nextRun.status)) {
+            toast.loading("Код отправлен в обработку", {
+                id: toastId,
+                description: "Запуск выполняется в Docker sandbox через очередь.",
+                duration: Number.POSITIVE_INFINITY,
+            })
+            return
+        }
+
+        if (nextRun.status === "finished" && nextRun.exit_code === 0) {
+            toast.success("Запуск завершён", { id: toastId, description: "Код успешно завершился в Docker sandbox.", duration: 5000 })
+        } else if (nextRun.status === "finished") {
+            toast.error("Запуск завершился с ошибкой", { id: toastId, description: `Exit code: ${nextRun.exit_code ?? "—"}`, duration: 5000 })
+        } else {
+            toast.error("Запуск не выполнен", { id: toastId, description: nextRun.message ?? nextRun.status, duration: 5000 })
+        }
+
+        activeRunToastRef.current = null
+    }
+
     async function handleRun() {
         setIsLoading(true)
         setRun(null)
 
-        const toastId = toast.loading("Запускаем код", {
-            description: `${activeLanguageLabel} · Docker sandbox`,
+        if (activeRunToastRef.current) {
+            toast.dismiss(activeRunToastRef.current)
+            activeRunToastRef.current = null
+        }
+
+        const toastId = toast.loading("Код отправлен в обработку", {
+            description: "Запуск выполняется в Docker sandbox через очередь.",
+            duration: Number.POSITIVE_INFINITY,
         })
+        activeRunToastRef.current = toastId
 
         try {
             const result = await runCode({
@@ -278,24 +332,14 @@ export function CodePlaygroundPage() {
             })
             setRun(result)
 
-            const toastOptions = {
-                id: toastId,
-                description: "Запуск выполняется в очереди. Результат придёт через Reverb или обновится на странице запуска.",
-                action: {
-                    label: "Открыть запуск",
-                    onClick: () => {
-                        window.location.href = `/playground/runs/${result.id}`
-                    },
-                },
-            }
-
-            toast.success("Код отправлен на проверку", toastOptions)
+            updateRunToast(result)
 
             if (result.snippet) {
                 setSnippets((items) => [result.snippet!, ...items.filter((item) => item.id !== result.snippet!.id)])
             }
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Не удалось выполнить код", { id: toastId })
+            activeRunToastRef.current = null
+            toast.error(error instanceof Error ? error.message : "Не удалось выполнить код", { id: toastId, duration: 5000 })
         } finally {
             setIsLoading(false)
         }
@@ -308,7 +352,7 @@ export function CodePlaygroundPage() {
                     <Badge variant="outline" className="gap-2"><Code2 className="size-3.5" />Mini IDE</Badge>
                     <Input value={title} onChange={(event) => setTitle(event.target.value)} className="h-9 w-56 border-0 bg-muted/60 font-medium shadow-none" />
                 </div>
-                <PlaygroundToolbar isLoading={isLoading} code={code} saveSnippet={saveSnippet} setSaveSnippet={setSaveSnippet} language={language} handleLanguageChange={handleLanguageChange} languages={languages} isBooting={isBooting} run={run} activeLanguageLabel={activeLanguageLabel} handleRun={handleRun} downloadCode={downloadCode} onUpload={() => fileInputRef.current?.click()} onOpenDialog={setImportDialog} onCopyCode={() => copyText(code, "Код скопирован")} onCopyMarkdown={() => copyText(`\`\`\`${language}\n${code}\n\`\`\``, "Markdown-блок скопирован")} onCopyLink={() => copyText(window.location.href, "Ссылка скопирована")} onCopySnippetLink={() => currentSnippet?.visibility === "public" && currentSnippet.status === "active" ? copyText(`${window.location.origin}/playground?snippet=${currentSnippet.id}`, "Ссылка на сниппет скопирована") : toast.warning("Сниппет приватный. Сделайте его публичным для ссылки.")} />
+                <PlaygroundToolbar isLoading={isLoading} code={code} saveSnippet={saveSnippet} setSaveSnippet={setSaveSnippet} language={language} handleLanguageChange={handleLanguageChange} languages={languages} isBooting={isBooting} run={run} activeLanguageLabel={activeLanguageLabel} handleRun={handleRun} downloadCode={downloadCode} onUpload={() => fileInputRef.current?.click()} onOpenDialog={setImportDialog} onCopyCode={() => copyText(code, "Код скопирован")} onCopyMarkdown={() => copyText(`\`\`\`${language}\n${code}\n\`\`\``, "Markdown-блок скопирован")} onCopyLink={() => copyText(window.location.href, "Ссылка скопирована")} onCopySnippetLink={() => currentSnippet?.visibility === "public" && currentSnippet.status === "active" ? copyText(`${window.location.origin}/playground?snippet=${currentSnippet.id}`, "Ссылка на сниппет скопирована") : toast.warning("Сниппет приватный. Сделайте его публичным для ссылки.")} title={title} stdin={stdin} aiExplanation={aiExplanation} aiSources={aiSources} isExplaining={isExplaining} onExplain={handleExplainCode} />
                 <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importLocalFile(file); event.currentTarget.value = "" }} />
             </section>
 
@@ -320,7 +364,7 @@ export function CodePlaygroundPage() {
                         </ResizablePanel>
                         <ResizableHandle withHandle />
                         <ResizablePanel defaultSize={32} minSize={20}>
-                            <PlaygroundConsolePanel run={run} stdin={stdin} setStdin={setStdin} consoleTab={consoleTab} setConsoleTab={setConsoleTab} isLoading={isLoading} isExplaining={isExplaining} aiExplanation={aiExplanation} aiSources={aiSources} handleExplainCode={handleExplainCode} />
+                            <PlaygroundConsolePanel run={run} stdin={stdin} setStdin={setStdin} consoleTab={consoleTab} setConsoleTab={setConsoleTab} isLoading={isLoading} />
                         </ResizablePanel>
                     </ResizablePanelGroup>
                 </div>
@@ -338,11 +382,19 @@ export function CodePlaygroundPage() {
 }
 
 
-type ToolbarProps = { isLoading: boolean; code: string; saveSnippet: boolean; setSaveSnippet: (updater: (value: boolean) => boolean) => void; language: string; handleLanguageChange: (value: string) => void; languages: PlaygroundLanguage[]; isBooting: boolean; run: CodeRun | null; activeLanguageLabel: string; handleRun: () => void; downloadCode: () => void; onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopyLink: () => void; onCopySnippetLink: () => void }
-function PlaygroundToolbar(props: ToolbarProps) { return <div className="flex flex-wrap items-center gap-2"><Button onClick={props.handleRun} disabled={props.isLoading || props.code.trim().length === 0} size="sm">{props.isLoading ? <Loader2 className="animate-spin" /> : <Play />}Run</Button><ImportCodeDropdown onUpload={props.onUpload} onOpenDialog={props.onOpenDialog} /><Button type="button" variant={props.saveSnippet ? "default" : "outline"} size="sm" onClick={() => props.setSaveSnippet((value) => !value)}><Save />Save</Button><Button type="button" variant="outline" size="sm" onClick={props.downloadCode}><Download />Download</Button><ShareSnippetDropdown onCopyLink={props.onCopyLink} onCopyCode={props.onCopyCode} onCopyMarkdown={props.onCopyMarkdown} onCopySnippetLink={props.onCopySnippetLink} /><Select value={props.language} onValueChange={props.handleLanguageChange} disabled={props.isBooting || props.languages.length === 0}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent>{props.languages.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select><Badge variant={props.run?.status === "failed" ? "destructive" : "secondary"}>{props.isLoading ? "running" : props.run?.status ?? props.activeLanguageLabel}</Badge></div> }
+type ToolbarProps = { isLoading: boolean; code: string; saveSnippet: boolean; setSaveSnippet: (updater: (value: boolean) => boolean) => void; language: string; handleLanguageChange: (value: string) => void; languages: PlaygroundLanguage[]; isBooting: boolean; run: CodeRun | null; activeLanguageLabel: string; handleRun: () => void; downloadCode: () => void; onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopyLink: () => void; onCopySnippetLink: () => void; title: string; stdin: string; aiExplanation: string | null; aiSources: RagSource[]; isExplaining: boolean; onExplain: (intent: CodeExplainIntent) => void }
+function PlaygroundToolbar(props: ToolbarProps) { return <div className="flex flex-wrap items-center gap-2"><Button onClick={props.handleRun} disabled={props.isLoading || props.code.trim().length === 0} size="sm">{props.isLoading ? <Loader2 className="animate-spin" /> : <Play />}Run</Button><ImportCodeDropdown onUpload={props.onUpload} onOpenDialog={props.onOpenDialog} /><Button type="button" variant={props.saveSnippet ? "default" : "outline"} size="sm" onClick={() => props.setSaveSnippet((value) => !value)}><Save />Save</Button><Button type="button" variant="outline" size="sm" onClick={props.downloadCode}><Download />Download</Button><ShareSnippetDropdown onCopyLink={props.onCopyLink} onCopyCode={props.onCopyCode} onCopyMarkdown={props.onCopyMarkdown} onCopySnippetLink={props.onCopySnippetLink} /><PlaygroundAiActionsPopover title={props.title} language={props.language} code={props.code} stdin={props.stdin} run={props.run} isExplaining={props.isExplaining} aiExplanation={props.aiExplanation} aiSources={props.aiSources} onExplain={props.onExplain} /><Select value={props.language} onValueChange={props.handleLanguageChange} disabled={props.isBooting || props.languages.length === 0}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent>{props.languages.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select><Badge variant={props.run?.status === "failed" ? "destructive" : "secondary"}>{props.isLoading ? "running" : props.run?.status ?? props.activeLanguageLabel}</Badge></div> }
 function ImportCodeDropdown({ onUpload, onOpenDialog }: { onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void }) { return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Import />Import<ChevronDown className="size-3" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={onUpload}><Upload />Upload local file</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("files")}><FolderOpen />From my files</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("snippets")}><FileCode2 />From my snippets</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("runs")}><History />From recent runs</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("templates")}><Files />From templates</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }
 function ShareSnippetDropdown(props: { onCopyLink: () => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopySnippetLink: () => void }) { return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Share2 />Share</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={props.onCopyLink}>Copy playground link</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopyCode}>Copy code</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopyMarkdown}>Copy markdown code block</DropdownMenuItem><DropdownMenuItem onSelect={() => toast.info("Будет добавлено позже")}>Send to AI assistant</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopySnippetLink}>Share snippet link</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem disabled>Insert into publication</DropdownMenuItem><DropdownMenuItem disabled>Insert into question/answer</DropdownMenuItem><DropdownMenuItem disabled>Send to chat</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }
-function PlaygroundConsolePanel({ run, stdin, setStdin, consoleTab, setConsoleTab, isLoading, isExplaining, aiExplanation, aiSources, handleExplainCode }: { run: CodeRun | null; stdin: string; setStdin: (value: string) => void; consoleTab: string; setConsoleTab: (value: string) => void; isLoading: boolean; isExplaining: boolean; aiExplanation: string | null; aiSources: RagSource[]; handleExplainCode: () => void }) { const hasError = Boolean(run?.stderr || run?.message); return <Tabs value={consoleTab} onValueChange={setConsoleTab} className="flex h-full flex-col bg-zinc-950 text-zinc-100"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><TabsList className="bg-white/5"><TabsTrigger value="console"><Terminal className="size-3.5" />Console</TabsTrigger><TabsTrigger value="errors" className={hasError ? "text-red-300" : undefined}>Errors{hasError ? <span className="ml-1 size-2 rounded-full bg-red-400" /> : null}</TabsTrigger><TabsTrigger value="input">Input</TabsTrigger><TabsTrigger value="ai">AI</TabsTrigger></TabsList>{run ? <Button asChild variant="ghost" size="sm" className="text-zinc-300"><Link href={`/playground/runs/${run.id}`}><ExternalLink className="size-4" />Run #{run.id}</Link></Button> : null}</div><TabsContent value="console" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm"><pre className="whitespace-pre-wrap">{isLoading || ["queued", "running"].includes(run?.status ?? "") ? "Running..." : run?.stdout || "Run code to see stdout."}</pre>{run ? <p className="mt-4 whitespace-pre-line text-xs text-zinc-400">Program finished with exit code {run.exit_code ?? "—"}{"\n"}Time: {run.execution_time ?? 0} ms · Memory: {formatMemory(run.memory_usage)}</p> : null}</TabsContent><TabsContent value="errors" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm text-red-100"><pre className="whitespace-pre-wrap">{run?.stderr || run?.message || "No errors."}</pre></TabsContent><TabsContent value="input" className="m-0 flex-1 p-3"><Textarea value={stdin} onChange={(event) => setStdin(event.target.value)} className="h-full min-h-0 resize-none border-white/10 bg-black/30 font-mono text-sm text-zinc-100" spellCheck={false} /></TabsContent><TabsContent value="ai" className="m-0 flex-1 overflow-auto p-4"><Button type="button" variant="secondary" onClick={handleExplainCode} disabled={isExplaining}>{isExplaining ? <Loader2 className="animate-spin" /> : <Bot />}{hasError ? "Explain error with AI" : "Explain result with AI"}</Button>{aiExplanation ? <div className="mt-4 space-y-4"><div className="whitespace-pre-wrap rounded-xl border border-white/10 bg-black/30 p-4 text-sm leading-6">{aiExplanation}</div>{aiSources.slice(0, 3).map((source) => <RagSourceCard key={source.id} source={source} />)}</div> : null}</TabsContent></Tabs> }
+
+function PlaygroundAiActionsPopover({ title, language, code, stdin, run, isExplaining, aiExplanation, aiSources, onExplain }: { title: string; language: string; code: string; stdin: string; run: CodeRun | null; isExplaining: boolean; aiExplanation: string | null; aiSources: RagSource[]; onExplain: (intent: CodeExplainIntent) => void }) {
+    const isPending = run ? ["queued", "running"].includes(run.status) : false
+    const hasError = Boolean(run?.stderr || (run?.exit_code !== null && run?.exit_code !== undefined && run.exit_code !== 0))
+    return <Popover><PopoverTrigger asChild><Button type="button" variant="secondary" size="sm"><Bot />AI</Button></PopoverTrigger><PopoverContent align="end" className="w-96"><div className="space-y-1"><p className="font-medium">AI-анализ песочницы</p><p className="text-xs text-muted-foreground">{!run ? "Можно разобрать код без результата запуска, но точнее будет после Run." : isPending ? "Запуск ещё выполняется. AI может объяснить код, но результата пока нет." : "AI учтёт stdout/stderr, exit code, время и память."}</p>{hasError ? <Badge variant="destructive">Есть ошибка запуска</Badge> : null}</div><div className="grid grid-cols-2 gap-2"><Button variant="outline" size="sm" onClick={() => onExplain("explain_result")} disabled={isExplaining}><Bot />Объяснить результат</Button><Button variant="outline" size="sm" onClick={() => onExplain("explain_error")} disabled={isExplaining}><Bot />Объяснить ошибку</Button><Button variant="outline" size="sm" onClick={() => onExplain("find_bug")} disabled={isExplaining}>Найти проблему</Button><Button variant="outline" size="sm" onClick={() => onExplain("optimize")} disabled={isExplaining}>Оптимизировать код</Button></div><div className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground"><div className="font-medium text-foreground">Контекст</div><div>{title} · {language} · stdin: {stdin ? "есть" : "нет"} · code: {code.length} симв.</div></div>{isExplaining ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />AI готовит ответ…</div> : null}{aiExplanation ? <div className="max-h-72 space-y-3 overflow-auto"><div className="whitespace-pre-wrap rounded-xl border bg-background p-3 text-sm leading-6">{aiExplanation}</div>{aiSources.length ? <div className="space-y-2">{aiSources.slice(0, 3).map((source) => <RagSourceCard key={source.id} source={source} />)}</div> : null}</div> : null}</PopoverContent></Popover>
+}
+
+function PlaygroundConsolePanel({ run, stdin, setStdin, consoleTab, setConsoleTab, isLoading }: { run: CodeRun | null; stdin: string; setStdin: (value: string) => void; consoleTab: string; setConsoleTab: (value: string) => void; isLoading: boolean }) { const hasError = Boolean(run?.stderr || run?.message); return <Tabs value={consoleTab} onValueChange={setConsoleTab} className="flex h-full flex-col bg-zinc-950 text-zinc-100"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><TabsList className="bg-white/5"><TabsTrigger value="console"><Terminal className="size-3.5" />Console</TabsTrigger><TabsTrigger value="errors" className={hasError ? "text-red-300" : undefined}>Errors{hasError ? <span className="ml-1 size-2 rounded-full bg-red-400" /> : null}</TabsTrigger><TabsTrigger value="input">Input</TabsTrigger></TabsList>{run ? <Button asChild variant="ghost" size="sm" className="text-zinc-300"><Link href={`/playground/runs/${run.id}`}><ExternalLink className="size-4" />Run #{run.id}</Link></Button> : null}</div><TabsContent value="console" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm"><pre className="whitespace-pre-wrap">{isLoading || ["queued", "running"].includes(run?.status ?? "") ? "Running..." : run?.stdout || "Run code to see stdout."}</pre>{run ? <p className="mt-4 whitespace-pre-line text-xs text-zinc-400">Program finished with exit code {run.exit_code ?? "—"}{"\n"}Time: {run.execution_time ?? 0} ms · Memory: {formatMemory(run.memory_usage)}</p> : null}</TabsContent><TabsContent value="errors" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm text-red-100"><pre className="whitespace-pre-wrap">{run?.stderr || run?.message || "No errors."}</pre></TabsContent><TabsContent value="input" className="m-0 flex-1 p-3"><Textarea value={stdin} onChange={(event) => setStdin(event.target.value)} className="h-full min-h-0 resize-none border-white/10 bg-black/30 font-mono text-sm text-zinc-100" spellCheck={false} /></TabsContent></Tabs> }
+
 function SidePanel({ snippets, files, runs, snippetQ, setSnippetQ, snippetStatusFilter, setSnippetStatusFilter, onSnippet, onFile, onRun }: { snippets: CodeSnippet[]; files: UserFile[]; runs: CodeRun[]; snippetQ: string; setSnippetQ: (value: string) => void; snippetStatusFilter: string; setSnippetStatusFilter: (value: string) => void; onSnippet: (item: CodeSnippet) => void; onFile: (item: UserFile) => void; onRun: (item: CodeRun) => void }) { return <Card className="h-full shadow-sm"><CardHeader className="pb-3"><CardTitle>Workspace</CardTitle><CardDescription>Сниппеты, файлы и последние запуски.</CardDescription></CardHeader><CardContent><Tabs defaultValue="snippets"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="snippets">Snippets</TabsTrigger><TabsTrigger value="files">Files</TabsTrigger><TabsTrigger value="runs">Runs</TabsTrigger></TabsList><TabsContent value="snippets" className="space-y-3"><div className="grid gap-2"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={snippetQ} onChange={(event) => setSnippetQ(event.target.value)} placeholder="Поиск" className="pl-9" /></div><Select value={snippetStatusFilter} onValueChange={setSnippetStatusFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все</SelectItem><SelectItem value="draft">Черновики</SelectItem><SelectItem value="active">Активные</SelectItem><SelectItem value="archived">Архив</SelectItem></SelectContent></Select></div><CompactList items={snippets} empty="Сниппетов пока нет" onClick={(item) => onSnippet(item as CodeSnippet)} /></TabsContent><TabsContent value="files"><CompactList items={files} empty="Текстовые файлы не найдены" onClick={(item) => onFile(item as UserFile)} /></TabsContent><TabsContent value="runs"><CompactList items={runs} empty="Запусков пока нет" onClick={(item) => onRun(item as CodeRun)} /></TabsContent></Tabs></CardContent></Card> }
 function CompactList({ items, empty, onClick }: { items: Array<CodeSnippet | UserFile | CodeRun>; empty: string; onClick: (item: CodeSnippet | UserFile | CodeRun) => void }) {
     if (!items.length) return <p className="py-6 text-sm text-muted-foreground">{empty}</p>

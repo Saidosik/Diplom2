@@ -1,5 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
-import type { AiChatMessage, AiChatResponse, AiChatSession, CodeExplainResponse, RagSearchResponse, RagSourceType } from "@/features/ai-rag/types"
+import type { AiChatMessage, AiChatResponse, AiChatSession, CodeExplainIntent, CodeExplainResponse, RagSearchResponse, RagSourceType } from "@/features/ai-rag/types"
 
 export async function ragSearch(payload: { query: string; type?: "all" | RagSourceType; limit?: number }) {
     const response = await browserApi.post<RagSearchResponse>("/laravel/ai/rag/search", payload)
@@ -22,7 +22,15 @@ export async function sendAiChatMessage(payload: { message: string; session_id?:
 }
 
 export async function explainCodeWithAi(payload: {
+    title?: string
     run_id?: number
+    run_status?: string | null
+    exit_code?: number | null
+    execution_time?: number | null
+    memory_usage?: number | null
+    intent?: CodeExplainIntent
+    backend_runner?: string
+    backend_execution_note?: string
     language?: string
     code?: string
     stdin?: string
