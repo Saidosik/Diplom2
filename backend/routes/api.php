@@ -43,6 +43,7 @@ use App\Http\Controllers\Api\User\PasswordController;
 use App\Http\Controllers\Api\User\ProfileController;
 use App\Http\Controllers\Api\User\PublicProfileController;
 use App\Http\Controllers\Api\User\UserFileController;
+use App\Http\Controllers\Api\User\UserFileFolderController;
 use App\Http\Controllers\Api\User\VerifyEmailAcountController;
 
 
@@ -108,6 +109,11 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::post('/me/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:uploads');
     Route::delete('/me/avatar', [ProfileController::class, 'destroyAvatar']);
     Route::delete('/me', [ProfileController::class, 'destroy']);
+
+    Route::get('/me/file-folders', [UserFileFolderController::class, 'index']);
+    Route::post('/me/file-folders', [UserFileFolderController::class, 'store']);
+    Route::match(['put', 'patch'], '/me/file-folders/{folder}', [UserFileFolderController::class, 'update']);
+    Route::delete('/me/file-folders/{folder}', [UserFileFolderController::class, 'destroy']);
 
     Route::get('/me/files', [UserFileController::class, 'index']);
     Route::post('/me/files', [UserFileController::class, 'store'])->middleware('throttle:uploads');

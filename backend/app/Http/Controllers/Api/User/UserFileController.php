@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\User;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserFileResource;
 use App\Models\UserFile;
+use App\Models\UserFileFolder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,8 +26,15 @@ class UserFileController extends Controller
         $kind = trim((string) $request->query('kind', ''));
         $visibility = trim((string) $request->query('visibility', ''));
         $sort = trim((string) $request->query('sort', 'newest'));
+        $folderId = trim((string) $request->query('folder_id', ''));
+        $pinned = trim((string) $request->query('pinned', ''));
+
+        if ($folderId !== '' && $folderId !== 'none') {
+            abort_unless(UserFileFolder::query()->where('user_id', $request->user()->id)->whereKey($folderId)->exists(), 404);
+        }
 
         $query = UserFile::query()
+            ->with('folder')
             ->where('user_id', $request->user()->id)
             ->when($q !== '', fn ($query) => $query->where(function ($query) use ($q) {
                 $query->where('title', 'ILIKE', "%{$q}%")
@@ -34,13 +42,17 @@ class UserFileController extends Controller
                     ->orWhere('mime_type', 'ILIKE', "%{$q}%");
             }))
             ->when($kind !== '', fn ($query) => $query->where('kind', $kind))
-            ->when(in_array($visibility, ['private', 'public'], true), fn ($query) => $query->where('visibility', $visibility));
+            ->when(in_array($visibility, ['private', 'public'], true), fn ($query) => $query->where('visibility', $visibility))
+            ->when($folderId === 'none', fn ($query) => $query->whereNull('folder_id'))
+            ->when($folderId !== '' && $folderId !== 'none', fn ($query) => $query->where('folder_id', (int) $folderId))
+            ->when($pinned === 'true', fn ($query) => $query->whereNotNull('pinned_at'))
+            ->when($pinned === 'false', fn ($query) => $query->whereNull('pinned_at'));
 
         match ($sort) {
             'oldest' => $query->oldest('id'),
             'name' => $query->orderByRaw('COALESCE(title, original_name) ASC'),
             'size' => $query->orderByDesc('size'),
-            default => $query->latest('id'),
+            default => $query->orderByRaw('CASE WHEN pinned_at IS NULL THEN 1 ELSE 0 END')->orderByDesc('pinned_at')->latest('id'),
         };
 
         $files = $query->paginate($perPage)->withQueryString();
@@ -52,7 +64,7 @@ class UserFileController extends Controller
     {
         $this->authorizeAccessible($request, $userFile);
 
-        return new UserFileResource($userFile);
+        return new UserFileResource($userFile->load('folder'));
     }
 
     public function store(Request $request): UserFileResource
@@ -66,11 +78,14 @@ class UserFileController extends Controller
             'file' => array_merge(['required', 'file', 'max:' . $maxFileKb], $allowedRule),
             'title' => ['nullable', 'string', 'max:160'],
             'visibility' => ['nullable', Rule::in(['private', 'public'])],
+            'folder_id' => ['nullable', 'integer'],
         ], [
             'file.required' => 'Выберите файл для загрузки.',
             'file.max' => "Размер файла не должен превышать {$maxFileMb} МБ.",
             'file.mimetypes' => 'Тип файла не разрешён для личного хранилища.',
         ]);
+
+        $folderId = $this->validatedFolderId($request, $data['folder_id'] ?? null);
 
         $file = $request->file('file');
         $extension = mb_strtolower((string) $file->getClientOriginalExtension());
@@ -86,6 +101,7 @@ class UserFileController extends Controller
 
         $userFile = UserFile::query()->create([
             'user_id' => $request->user()->id,
+            'folder_id' => $folderId,
             'title' => $data['title'] ?? null,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $mime,
@@ -97,7 +113,7 @@ class UserFileController extends Controller
             'metadata' => ['extension' => $extension],
         ]);
 
-        return new UserFileResource($userFile);
+        return new UserFileResource($userFile->load('folder'));
     }
 
     public function update(Request $request, UserFile $userFile): UserFileResource
@@ -107,6 +123,8 @@ class UserFileController extends Controller
         $data = $request->validate([
             'title' => ['nullable', 'string', 'max:160'],
             'visibility' => ['sometimes', Rule::in(['private', 'public'])],
+            'pinned' => ['sometimes', 'boolean'],
+            'folder_id' => ['sometimes', 'nullable', 'integer'],
         ]);
 
         if (($data['visibility'] ?? null) === 'public' && $userFile->visibility !== 'public') {
@@ -117,9 +135,18 @@ class UserFileController extends Controller
             }
         }
 
+        if (array_key_exists('pinned', $data)) {
+            $data['pinned_at'] = $request->boolean('pinned') ? now() : null;
+            unset($data['pinned']);
+        }
+
+        if (array_key_exists('folder_id', $data)) {
+            $data['folder_id'] = $this->validatedFolderId($request, $data['folder_id']);
+        }
+
         $userFile->update($data);
 
-        return new UserFileResource($userFile->fresh());
+        return new UserFileResource($userFile->fresh()->load('folder'));
     }
 
     public function destroy(Request $request, UserFile $userFile): JsonResponse
@@ -155,6 +182,22 @@ class UserFileController extends Controller
         if (is_resource($stream)) fclose($stream);
 
         return response()->json(['content' => $content, 'truncated' => (int) $userFile->size > self::PREVIEW_BYTES]);
+    }
+
+    private function validatedFolderId(Request $request, mixed $folderId): ?int
+    {
+        if ($folderId === null || $folderId === '') {
+            return null;
+        }
+
+        $exists = UserFileFolder::query()
+            ->where('user_id', $request->user()->id)
+            ->whereKey((int) $folderId)
+            ->exists();
+
+        abort_unless($exists, 404);
+
+        return (int) $folderId;
     }
 
     private function authorizeOwner(Request $request, UserFile $userFile): void { abort_unless((int) $userFile->user_id === (int) $request->user()->id, 403); }
