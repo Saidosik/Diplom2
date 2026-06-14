@@ -129,20 +129,3 @@
     @apply font-sans;
   }
 }
-
-@layer components {
-  .mx-auto.max-w-7xl.space-y-5.overflow-x-hidden {
-    max-width: min(1440px, calc(100vw - 2rem));
-  }
-
-  @media (min-width: 1024px) {
-    .mx-auto.max-w-7xl.space-y-5.overflow-x-hidden > .grid.gap-4 {
-      grid-template-columns: 280px minmax(0, 1fr) !important;
-      align-items: start;
-    }
-  }
-
-  .mx-auto.max-w-7xl.space-y-5.overflow-x-hidden > .grid.gap-4 > .overflow-hidden {
-    min-width: 0;
-  }
-}
