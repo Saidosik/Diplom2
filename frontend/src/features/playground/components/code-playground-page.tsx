@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Bot, ChevronDown, Code2, Download, ExternalLink, FileCode2, Files, FolderOpen, History, Import, Loader2, Play, Save, Search, Share2, Terminal, Upload } from "lucide-react"
+import { Bot, Code2, Download, ExternalLink, FileCode2, Files, FolderOpen, History, Loader2, Play, Save, Search, Terminal, Upload } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
+import { Menubar, MenubarContent, MenubarItem, MenubarMenu, MenubarSeparator, MenubarShortcut, MenubarTrigger } from "@/components/ui/menubar"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -89,6 +91,8 @@ export function CodePlaygroundPage() {
     const [aiSources, setAiSources] = useState<RagSource[]>([])
     const [isBooting, setIsBooting] = useState(true)
     const [consoleTab, setConsoleTab] = useState("console")
+    const [isTerminalVisible, setIsTerminalVisible] = useState(true)
+    const [workspaceTab, setWorkspaceTab] = useState("snippets")
     const [importDialog, setImportDialog] = useState<"files" | "snippets" | "runs" | "templates" | null>(null)
     const [currentSnippet, setCurrentSnippet] = useState<CodeSnippet | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -158,6 +162,32 @@ export function CodePlaygroundPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [run?.id, run?.status])
 
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!(event.ctrlKey || event.metaKey)) return
+
+            if (event.key === "Enter") {
+                event.preventDefault()
+                if (!isLoading && code.trim().length > 0) void handleRun()
+            }
+
+            if (event.key.toLowerCase() === "s") {
+                event.preventDefault()
+                setSaveSnippet(true)
+                toast.success("Сниппет будет сохранён при следующем запуске")
+            }
+
+            if (event.key.toLowerCase() === "k") {
+                event.preventDefault()
+                setImportDialog("snippets")
+            }
+        }
+
+        window.addEventListener("keydown", onKeyDown)
+        return () => window.removeEventListener("keydown", onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoading, code, language, stdin, title, saveSnippet, visibility, snippetType, snippetStatus])
+
     const activeLanguageLabel = useMemo(() => {
         return languages.find((item) => item.value === language)?.label ?? language
     }, [languages, language])
@@ -219,6 +249,22 @@ export function CodePlaygroundPage() {
     async function copyText(value: string, message: string) {
         await navigator.clipboard.writeText(value)
         toast.success(message)
+    }
+
+    function clearConsole() {
+        setRun(null)
+        setAiExplanation(null)
+        setAiSources([])
+        setConsoleTab("console")
+    }
+
+    function newFile() {
+        loadDocument({ title: "Новый файл", code: defaultCodeByLanguage[language] ?? "", stdin: "" })
+    }
+
+    function markSnippetForSave() {
+        setSaveSnippet(true)
+        toast.success("Сниппет будет сохранён при следующем запуске")
     }
 
     function loadSnippet(snippet: CodeSnippet) {
@@ -352,23 +398,25 @@ export function CodePlaygroundPage() {
                     <Badge variant="outline" className="gap-2"><Code2 className="size-3.5" />Mini IDE</Badge>
                     <Input value={title} onChange={(event) => setTitle(event.target.value)} className="h-9 w-56 border-0 bg-muted/60 font-medium shadow-none" />
                 </div>
-                <PlaygroundToolbar isLoading={isLoading} code={code} saveSnippet={saveSnippet} setSaveSnippet={setSaveSnippet} language={language} handleLanguageChange={handleLanguageChange} languages={languages} isBooting={isBooting} run={run} activeLanguageLabel={activeLanguageLabel} handleRun={handleRun} downloadCode={downloadCode} onUpload={() => fileInputRef.current?.click()} onOpenDialog={setImportDialog} onCopyCode={() => copyText(code, "Код скопирован")} onCopyMarkdown={() => copyText(`\`\`\`${language}\n${code}\n\`\`\``, "Markdown-блок скопирован")} onCopyLink={() => copyText(window.location.href, "Ссылка скопирована")} onCopySnippetLink={() => currentSnippet?.visibility === "public" && currentSnippet.status === "active" ? copyText(`${window.location.origin}/playground?snippet=${currentSnippet.id}`, "Ссылка на сниппет скопирована") : toast.warning("Сниппет приватный. Сделайте его публичным для ссылки.")} title={title} stdin={stdin} aiExplanation={aiExplanation} aiSources={aiSources} isExplaining={isExplaining} onExplain={handleExplainCode} />
+                <PlaygroundToolbar isLoading={isLoading} code={code} saveSnippet={saveSnippet} setSaveSnippet={setSaveSnippet} language={language} handleLanguageChange={handleLanguageChange} languages={languages} isBooting={isBooting} run={run} activeLanguageLabel={activeLanguageLabel} handleRun={handleRun} downloadCode={downloadCode} newFile={newFile} clearConsole={clearConsole} resetTemplate={() => handleLanguageChange(language)} markSnippetForSave={markSnippetForSave} isTerminalVisible={isTerminalVisible} toggleTerminal={() => setIsTerminalVisible((value) => !value)} openWorkspace={setWorkspaceTab} onUpload={() => fileInputRef.current?.click()} onOpenDialog={setImportDialog} onCopyCode={() => copyText(code, "Код скопирован")} onCopyMarkdown={() => copyText(`\`\`\`${language}\n${code}\n\`\`\``, "Markdown-блок скопирован")} onCopyLink={() => copyText(window.location.href, "Ссылка скопирована")} onCopySnippetLink={() => currentSnippet?.visibility === "public" && currentSnippet.status === "active" ? copyText(`${window.location.origin}/playground?snippet=${currentSnippet.id}`, "Ссылка на сниппет скопирована") : toast.warning("Сниппет приватный. Сделайте его публичным для ссылки.")} title={title} stdin={stdin} aiExplanation={aiExplanation} aiSources={aiSources} isExplaining={isExplaining} onExplain={handleExplainCode} />
                 <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importLocalFile(file); event.currentTarget.value = "" }} />
             </section>
 
             <section className="grid min-h-[720px] gap-4 xl:grid-cols-[1fr_320px]">
                 <div className="overflow-hidden rounded-3xl border bg-card shadow-sm">
                     <ResizablePanelGroup {...{ direction: "vertical" }}>
-                        <ResizablePanel defaultSize={68} minSize={40}>
+                        <ResizablePanel defaultSize={isTerminalVisible ? 68 : 100} minSize={40}>
                             <MonacoCodeEditor value={code} onChange={setCode} language={monacoLanguage} height="100%" className="h-full rounded-none border-0" />
                         </ResizablePanel>
-                        <ResizableHandle withHandle />
-                        <ResizablePanel defaultSize={32} minSize={20}>
-                            <PlaygroundConsolePanel run={run} stdin={stdin} setStdin={setStdin} consoleTab={consoleTab} setConsoleTab={setConsoleTab} isLoading={isLoading} />
-                        </ResizablePanel>
+                        {isTerminalVisible ? <>
+                            <ResizableHandle withHandle />
+                            <ResizablePanel defaultSize={32} minSize={20}>
+                                <PlaygroundConsolePanel run={run} stdin={stdin} setStdin={setStdin} consoleTab={consoleTab} setConsoleTab={setConsoleTab} isLoading={isLoading} />
+                            </ResizablePanel>
+                        </> : null}
                     </ResizablePanelGroup>
                 </div>
-                <SidePanel snippets={snippets} files={files} runs={runs} snippetQ={snippetQ} setSnippetQ={setSnippetQ} snippetStatusFilter={snippetStatusFilter} setSnippetStatusFilter={setSnippetStatusFilter} onSnippet={loadSnippet} onFile={importUserFile} onRun={(item) => loadDocument({ title: `Run #${item.id}`, language: item.language, code: item.code, stdin: item.stdin ?? "" })} />
+                <SidePanel workspaceTab={workspaceTab} onWorkspaceTabChange={setWorkspaceTab} snippets={snippets} files={files} runs={runs} snippetQ={snippetQ} setSnippetQ={setSnippetQ} snippetStatusFilter={snippetStatusFilter} setSnippetStatusFilter={setSnippetStatusFilter} onSnippet={loadSnippet} onFile={importUserFile} onRun={(item) => loadDocument({ title: `Run #${item.id}`, language: item.language, code: item.code, stdin: item.stdin ?? "" })} />
             </section>
 
             <ImportFromUserFilesCommandDialog open={importDialog === "files"} onOpenChange={(open) => setImportDialog(open ? "files" : null)} files={files} onSelect={importUserFile} />
@@ -382,10 +430,10 @@ export function CodePlaygroundPage() {
 }
 
 
-type ToolbarProps = { isLoading: boolean; code: string; saveSnippet: boolean; setSaveSnippet: (updater: (value: boolean) => boolean) => void; language: string; handleLanguageChange: (value: string) => void; languages: PlaygroundLanguage[]; isBooting: boolean; run: CodeRun | null; activeLanguageLabel: string; handleRun: () => void; downloadCode: () => void; onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopyLink: () => void; onCopySnippetLink: () => void; title: string; stdin: string; aiExplanation: string | null; aiSources: RagSource[]; isExplaining: boolean; onExplain: (intent: CodeExplainIntent) => void }
-function PlaygroundToolbar(props: ToolbarProps) { return <div className="flex flex-wrap items-center gap-2"><Button onClick={props.handleRun} disabled={props.isLoading || props.code.trim().length === 0} size="sm">{props.isLoading ? <Loader2 className="animate-spin" /> : <Play />}Run</Button><ImportCodeDropdown onUpload={props.onUpload} onOpenDialog={props.onOpenDialog} /><Button type="button" variant={props.saveSnippet ? "default" : "outline"} size="sm" onClick={() => props.setSaveSnippet((value) => !value)}><Save />Save</Button><Button type="button" variant="outline" size="sm" onClick={props.downloadCode}><Download />Download</Button><ShareSnippetDropdown onCopyLink={props.onCopyLink} onCopyCode={props.onCopyCode} onCopyMarkdown={props.onCopyMarkdown} onCopySnippetLink={props.onCopySnippetLink} /><PlaygroundAiActionsPopover title={props.title} language={props.language} code={props.code} stdin={props.stdin} run={props.run} isExplaining={props.isExplaining} aiExplanation={props.aiExplanation} aiSources={props.aiSources} onExplain={props.onExplain} /><Select value={props.language} onValueChange={props.handleLanguageChange} disabled={props.isBooting || props.languages.length === 0}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent>{props.languages.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select><Badge variant={props.run?.status === "failed" ? "destructive" : "secondary"}>{props.isLoading ? "running" : props.run?.status ?? props.activeLanguageLabel}</Badge></div> }
-function ImportCodeDropdown({ onUpload, onOpenDialog }: { onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void }) { return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Import />Import<ChevronDown className="size-3" /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={onUpload}><Upload />Upload local file</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("files")}><FolderOpen />From my files</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("snippets")}><FileCode2 />From my snippets</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("runs")}><History />From recent runs</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenDialog("templates")}><Files />From templates</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }
-function ShareSnippetDropdown(props: { onCopyLink: () => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopySnippetLink: () => void }) { return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Share2 />Share</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={props.onCopyLink}>Copy playground link</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopyCode}>Copy code</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopyMarkdown}>Copy markdown code block</DropdownMenuItem><DropdownMenuItem onSelect={() => toast.info("Будет добавлено позже")}>Send to AI assistant</DropdownMenuItem><DropdownMenuItem onSelect={props.onCopySnippetLink}>Share snippet link</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem disabled>Insert into publication</DropdownMenuItem><DropdownMenuItem disabled>Insert into question/answer</DropdownMenuItem><DropdownMenuItem disabled>Send to chat</DropdownMenuItem></DropdownMenuContent></DropdownMenu> }
+type ToolbarProps = { isLoading: boolean; code: string; saveSnippet: boolean; setSaveSnippet: (updater: (value: boolean) => boolean) => void; language: string; handleLanguageChange: (value: string) => void; languages: PlaygroundLanguage[]; isBooting: boolean; run: CodeRun | null; activeLanguageLabel: string; handleRun: () => void; downloadCode: () => void; newFile: () => void; clearConsole: () => void; resetTemplate: () => void; markSnippetForSave: () => void; isTerminalVisible: boolean; toggleTerminal: () => void; openWorkspace: (value: string) => void; onUpload: () => void; onOpenDialog: (value: "files" | "snippets" | "runs" | "templates") => void; onCopyCode: () => void; onCopyMarkdown: () => void; onCopyLink: () => void; onCopySnippetLink: () => void; title: string; stdin: string; aiExplanation: string | null; aiSources: RagSource[]; isExplaining: boolean; onExplain: (intent: CodeExplainIntent) => void }
+function PlaygroundToolbar(props: ToolbarProps) {
+    return <div className="flex w-full flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-2"><Menubar className="bg-background/60"><MenubarMenu><MenubarTrigger>File</MenubarTrigger><MenubarContent><MenubarItem onSelect={props.newFile}>New file</MenubarItem><MenubarItem onSelect={props.onUpload}><Upload />Import local file</MenubarItem><MenubarItem onSelect={() => props.onOpenDialog("files")}><FolderOpen />Import from my files</MenubarItem><MenubarItem onSelect={() => props.onOpenDialog("snippets")}><FileCode2 />Import from snippets<MenubarShortcut>⌘K</MenubarShortcut></MenubarItem><MenubarItem onSelect={() => props.onOpenDialog("runs")}><History />Import from recent runs</MenubarItem><MenubarItem onSelect={() => props.onOpenDialog("templates")}><Files />Import from templates</MenubarItem><MenubarSeparator /><MenubarItem onSelect={props.markSnippetForSave}><Save />Save snippet<MenubarShortcut>⌘S</MenubarShortcut></MenubarItem><MenubarItem onSelect={props.downloadCode}><Download />Download script</MenubarItem></MenubarContent></MenubarMenu><MenubarMenu><MenubarTrigger>Run</MenubarTrigger><MenubarContent><MenubarItem onSelect={props.handleRun} disabled={props.isLoading || props.code.trim().length === 0}><Play />Run code<MenubarShortcut>⌘↵</MenubarShortcut></MenubarItem><MenubarItem onSelect={props.clearConsole}>Clear console</MenubarItem><MenubarItem onSelect={props.resetTemplate}>Reset template</MenubarItem></MenubarContent></MenubarMenu><MenubarMenu><MenubarTrigger>View</MenubarTrigger><MenubarContent><MenubarItem onSelect={() => props.openWorkspace("snippets")}>Open snippets</MenubarItem><MenubarItem onSelect={() => props.openWorkspace("files")}>Open files</MenubarItem><MenubarItem onSelect={() => props.openWorkspace("runs")}>Open runs</MenubarItem><MenubarSeparator /><MenubarItem onSelect={props.toggleTerminal}>{props.isTerminalVisible ? "Hide terminal" : "Show terminal"}</MenubarItem></MenubarContent></MenubarMenu><MenubarMenu><MenubarTrigger>Share</MenubarTrigger><MenubarContent><MenubarItem onSelect={props.onCopyCode}>Copy code</MenubarItem><MenubarItem onSelect={props.onCopyMarkdown}>Copy markdown code block</MenubarItem><MenubarItem onSelect={props.onCopyLink}>Copy playground link</MenubarItem><MenubarItem onSelect={props.onCopySnippetLink}>Copy public snippet link</MenubarItem></MenubarContent></MenubarMenu><MenubarMenu><MenubarTrigger>AI</MenubarTrigger><MenubarContent><MenubarItem onSelect={() => props.onExplain("explain_result")}>Explain result</MenubarItem><MenubarItem onSelect={() => props.onExplain("explain_error")}>Explain error</MenubarItem><MenubarItem onSelect={() => props.onExplain("find_bug")}>Find bug</MenubarItem><MenubarItem onSelect={() => props.onExplain("optimize")}>Optimize code</MenubarItem><MenubarItem onSelect={() => props.onExplain("write_tests")}>Write tests</MenubarItem></MenubarContent></MenubarMenu></Menubar><Button onClick={props.handleRun} disabled={props.isLoading || props.code.trim().length === 0} size="sm">{props.isLoading ? <Loader2 className="animate-spin" /> : <Play />}Run</Button><Button type="button" variant={props.saveSnippet ? "default" : "outline"} size="sm" onClick={() => props.setSaveSnippet((value) => !value)}><Save />Save</Button><PlaygroundAiActionsPopover title={props.title} language={props.language} code={props.code} stdin={props.stdin} run={props.run} isExplaining={props.isExplaining} aiExplanation={props.aiExplanation} aiSources={props.aiSources} onExplain={props.onExplain} /><KbdGroup className="ml-1 hidden md:inline-flex"><Kbd>⌘</Kbd><Kbd>Enter</Kbd><Kbd>Run</Kbd></KbdGroup><KbdGroup className="hidden md:inline-flex"><Kbd>⌘</Kbd><Kbd>S</Kbd><Kbd>Save</Kbd></KbdGroup><KbdGroup className="hidden lg:inline-flex"><Kbd>⌘</Kbd><Kbd>K</Kbd><Kbd>Import</Kbd></KbdGroup></div><div className="flex items-center gap-2"><Badge variant={props.run?.status === "failed" ? "destructive" : "secondary"}>{props.isLoading ? "running" : props.run?.status ?? props.activeLanguageLabel}</Badge><NativeSelect size="sm" value={props.language} onChange={(event) => props.handleLanguageChange(event.target.value)} disabled={props.isBooting || props.languages.length === 0} className="w-44">{props.languages.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}</NativeSelect></div></div>
+}
 
 function PlaygroundAiActionsPopover({ title, language, code, stdin, run, isExplaining, aiExplanation, aiSources, onExplain }: { title: string; language: string; code: string; stdin: string; run: CodeRun | null; isExplaining: boolean; aiExplanation: string | null; aiSources: RagSource[]; onExplain: (intent: CodeExplainIntent) => void }) {
     const isPending = run ? ["queued", "running"].includes(run.status) : false
@@ -395,7 +443,7 @@ function PlaygroundAiActionsPopover({ title, language, code, stdin, run, isExpla
 
 function PlaygroundConsolePanel({ run, stdin, setStdin, consoleTab, setConsoleTab, isLoading }: { run: CodeRun | null; stdin: string; setStdin: (value: string) => void; consoleTab: string; setConsoleTab: (value: string) => void; isLoading: boolean }) { const hasError = Boolean(run?.stderr || run?.message); return <Tabs value={consoleTab} onValueChange={setConsoleTab} className="flex h-full flex-col bg-zinc-950 text-zinc-100"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><TabsList className="bg-white/5"><TabsTrigger value="console"><Terminal className="size-3.5" />Console</TabsTrigger><TabsTrigger value="errors" className={hasError ? "text-red-300" : undefined}>Errors{hasError ? <span className="ml-1 size-2 rounded-full bg-red-400" /> : null}</TabsTrigger><TabsTrigger value="input">Input</TabsTrigger></TabsList>{run ? <Button asChild variant="ghost" size="sm" className="text-zinc-300"><Link href={`/playground/runs/${run.id}`}><ExternalLink className="size-4" />Run #{run.id}</Link></Button> : null}</div><TabsContent value="console" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm"><pre className="whitespace-pre-wrap">{isLoading || ["queued", "running"].includes(run?.status ?? "") ? "Running..." : run?.stdout || "Run code to see stdout."}</pre>{run ? <p className="mt-4 whitespace-pre-line text-xs text-zinc-400">Program finished with exit code {run.exit_code ?? "—"}{"\n"}Time: {run.execution_time ?? 0} ms · Memory: {formatMemory(run.memory_usage)}</p> : null}</TabsContent><TabsContent value="errors" className="m-0 flex-1 overflow-auto p-4 font-mono text-sm text-red-100"><pre className="whitespace-pre-wrap">{run?.stderr || run?.message || "No errors."}</pre></TabsContent><TabsContent value="input" className="m-0 flex-1 p-3"><Textarea value={stdin} onChange={(event) => setStdin(event.target.value)} className="h-full min-h-0 resize-none border-white/10 bg-black/30 font-mono text-sm text-zinc-100" spellCheck={false} /></TabsContent></Tabs> }
 
-function SidePanel({ snippets, files, runs, snippetQ, setSnippetQ, snippetStatusFilter, setSnippetStatusFilter, onSnippet, onFile, onRun }: { snippets: CodeSnippet[]; files: UserFile[]; runs: CodeRun[]; snippetQ: string; setSnippetQ: (value: string) => void; snippetStatusFilter: string; setSnippetStatusFilter: (value: string) => void; onSnippet: (item: CodeSnippet) => void; onFile: (item: UserFile) => void; onRun: (item: CodeRun) => void }) { return <Card className="h-full shadow-sm"><CardHeader className="pb-3"><CardTitle>Workspace</CardTitle><CardDescription>Сниппеты, файлы и последние запуски.</CardDescription></CardHeader><CardContent><Tabs defaultValue="snippets"><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="snippets">Snippets</TabsTrigger><TabsTrigger value="files">Files</TabsTrigger><TabsTrigger value="runs">Runs</TabsTrigger></TabsList><TabsContent value="snippets" className="space-y-3"><div className="grid gap-2"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={snippetQ} onChange={(event) => setSnippetQ(event.target.value)} placeholder="Поиск" className="pl-9" /></div><Select value={snippetStatusFilter} onValueChange={setSnippetStatusFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все</SelectItem><SelectItem value="draft">Черновики</SelectItem><SelectItem value="active">Активные</SelectItem><SelectItem value="archived">Архив</SelectItem></SelectContent></Select></div><CompactList items={snippets} empty="Сниппетов пока нет" onClick={(item) => onSnippet(item as CodeSnippet)} /></TabsContent><TabsContent value="files"><CompactList items={files} empty="Текстовые файлы не найдены" onClick={(item) => onFile(item as UserFile)} /></TabsContent><TabsContent value="runs"><CompactList items={runs} empty="Запусков пока нет" onClick={(item) => onRun(item as CodeRun)} /></TabsContent></Tabs></CardContent></Card> }
+function SidePanel({ workspaceTab, onWorkspaceTabChange, snippets, files, runs, snippetQ, setSnippetQ, snippetStatusFilter, setSnippetStatusFilter, onSnippet, onFile, onRun }: { workspaceTab: string; onWorkspaceTabChange: (value: string) => void; snippets: CodeSnippet[]; files: UserFile[]; runs: CodeRun[]; snippetQ: string; setSnippetQ: (value: string) => void; snippetStatusFilter: string; setSnippetStatusFilter: (value: string) => void; onSnippet: (item: CodeSnippet) => void; onFile: (item: UserFile) => void; onRun: (item: CodeRun) => void }) { return <Card className="h-full shadow-sm"><CardHeader className="pb-3"><CardTitle>Workspace</CardTitle><CardDescription>Сниппеты, файлы и последние запуски.</CardDescription></CardHeader><CardContent><Tabs value={workspaceTab} onValueChange={onWorkspaceTabChange}><TabsList className="grid w-full grid-cols-3"><TabsTrigger value="snippets">Snippets</TabsTrigger><TabsTrigger value="files">Files</TabsTrigger><TabsTrigger value="runs">Runs</TabsTrigger></TabsList><TabsContent value="snippets" className="space-y-3"><div className="grid gap-2"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={snippetQ} onChange={(event) => setSnippetQ(event.target.value)} placeholder="Поиск" className="pl-9" /></div><Select value={snippetStatusFilter} onValueChange={setSnippetStatusFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все</SelectItem><SelectItem value="draft">Черновики</SelectItem><SelectItem value="active">Активные</SelectItem><SelectItem value="archived">Архив</SelectItem></SelectContent></Select></div><CompactList items={snippets} empty="Сниппетов пока нет" onClick={(item) => onSnippet(item as CodeSnippet)} /></TabsContent><TabsContent value="files"><CompactList items={files} empty="Текстовые файлы не найдены" onClick={(item) => onFile(item as UserFile)} /></TabsContent><TabsContent value="runs"><CompactList items={runs} empty="Запусков пока нет" onClick={(item) => onRun(item as CodeRun)} /></TabsContent></Tabs></CardContent></Card> }
 function CompactList({ items, empty, onClick }: { items: Array<CodeSnippet | UserFile | CodeRun>; empty: string; onClick: (item: CodeSnippet | UserFile | CodeRun) => void }) {
     if (!items.length) return <p className="py-6 text-sm text-muted-foreground">{empty}</p>
     return <div className="max-h-[560px] space-y-2 overflow-auto pr-1">{items.map((raw) => {
