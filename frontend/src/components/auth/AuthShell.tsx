@@ -26,12 +26,11 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
             <div className="relative z-10 mx-auto grid min-h-svh w-full max-w-6xl items-center gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)] lg:gap-14 lg:py-12">
                 <section className="mx-auto w-full max-w-xl text-center lg:mx-0 lg:text-left">
-                    <div className="mb-8 flex justify-center lg:justify-start">
-                        <SiteBrand size="lg" />
-                    </div>
                     <div className="rounded-3xl border border-white/10 bg-[#07110c] p-6 shadow-2xl shadow-black/30 sm:p-8">
-                        <p className="text-sm font-medium uppercase tracking-[0.28em] text-primary">Вектор</p>
-                        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                        <div className="flex justify-center lg:justify-start">
+                            <SiteBrand size="lg" />
+                        </div>
+                        <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                             Пространство для знаний, практики и общения
                         </h1>
                         <ul className="mt-6 space-y-3 text-left text-sm text-slate-300 sm:text-base">
