@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
     Archive,
@@ -76,9 +76,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -189,6 +187,15 @@ export function FilesPage() {
         setDragActive(false)
     }
 
+    const chooseUploadFiles = useCallback((files: FileList | null) => {
+        const selected = files?.item(0)
+        if (!selected) return
+        setSelectedFile(selected)
+        if ((files?.length ?? 0) > 1) {
+            toast.info("Выбран первый файл. Массовая загрузка будет добавлена позже.")
+        }
+    }, [])
+
     function submitUpload() {
         if (!selectedFile) return
         uploadMutation.mutate({
@@ -252,11 +259,49 @@ export function FilesPage() {
         deleteMutation.mutate(pendingAction.file.id)
     }
 
-    function chooseFile(file?: File | null) {
-        if (!file) return
-        setSelectedFile(file)
-        if (!uploadTitle.trim()) setUploadTitle("")
-    }
+    useEffect(() => {
+        if (!uploadOpen) return
+
+        const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files")
+        const preventFileOpen = (event: DragEvent) => {
+            if (!hasFiles(event)) return
+            event.preventDefault()
+            event.stopPropagation()
+        }
+        const onDragEnter = (event: DragEvent) => {
+            if (!hasFiles(event)) return
+            preventFileOpen(event)
+            setDragActive(true)
+        }
+        const onDragOver = (event: DragEvent) => {
+            if (!hasFiles(event)) return
+            preventFileOpen(event)
+            setDragActive(true)
+        }
+        const onDragLeave = (event: DragEvent) => {
+            if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
+                setDragActive(false)
+            }
+        }
+        const onDrop = (event: DragEvent) => {
+            if (!hasFiles(event)) return
+            preventFileOpen(event)
+            chooseUploadFiles(event.dataTransfer?.files ?? null)
+            setDragActive(false)
+        }
+
+        window.addEventListener("dragenter", onDragEnter)
+        window.addEventListener("dragover", onDragOver)
+        window.addEventListener("dragleave", onDragLeave)
+        window.addEventListener("drop", onDrop)
+
+        return () => {
+            window.removeEventListener("dragenter", onDragEnter)
+            window.removeEventListener("dragover", onDragOver)
+            window.removeEventListener("dragleave", onDragLeave)
+            window.removeEventListener("drop", onDrop)
+        }
+    }, [chooseUploadFiles, uploadOpen])
 
     return (
         <TooltipProvider>
@@ -389,7 +434,7 @@ export function FilesPage() {
                     </CardContent>
                 </Card>
 
-                <UploadSheet
+                <UploadDialog
                     open={uploadOpen}
                     onOpenChange={setUploadOpen}
                     inputRef={inputRef}
@@ -401,7 +446,7 @@ export function FilesPage() {
                     dragActive={dragActive}
                     isPending={uploadMutation.isPending}
                     onCancel={() => { setUploadOpen(false); resetUploadForm() }}
-                    onChoose={chooseFile}
+                    onChoose={chooseUploadFiles}
                     onTitleChange={setUploadTitle}
                     onVisibilityChange={setUploadVisibility}
                     onDragActiveChange={setDragActive}
@@ -436,6 +481,8 @@ export function FilesPage() {
                     onOpenChange={(open) => !open && setPendingAction(null)}
                     onConfirm={runPendingAction}
                 />
+
+                <FullscreenDragOverlay visible={uploadOpen && dragActive} />
             </div>
         </TooltipProvider>
     )
@@ -460,7 +507,7 @@ function StorageStrip({ meta, freeBytes }: { meta?: UserFileStorageMeta; freeByt
     )
 }
 
-function UploadSheet({
+function UploadDialog({
     open,
     onOpenChange,
     inputRef,
@@ -489,7 +536,7 @@ function UploadSheet({
     dragActive: boolean
     isPending: boolean
     onCancel: () => void
-    onChoose: (file?: File | null) => void
+    onChoose: (files: FileList | null) => void
     onTitleChange: (value: string) => void
     onVisibilityChange: (value: "private" | "public") => void
     onDragActiveChange: (active: boolean) => void
@@ -498,80 +545,95 @@ function UploadSheet({
     const canUpload = Boolean(selectedFile) && !isPending
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full sm:max-w-xl md:max-w-2xl">
-                <SheetHeader>
-                    <SheetTitle>Загрузка файла</SheetTitle>
-                    <SheetDescription>Выберите файл и настройте доступ перед загрузкой.</SheetDescription>
-                </SheetHeader>
-                <ScrollArea className="min-h-0 flex-1 px-6">
-                    <div className="space-y-5 pb-6">
-                        <div
-                            onDragEnter={() => onDragActiveChange(true)}
-                            onDragLeave={() => onDragActiveChange(false)}
-                            onDragOver={(event) => event.preventDefault()}
-                            onDrop={(event) => {
-                                event.preventDefault()
-                                onDragActiveChange(false)
-                                onChoose(event.dataTransfer.files.item(0))
+        <Dialog open={open} onOpenChange={(nextOpen) => {
+            onOpenChange(nextOpen)
+            if (!nextOpen) onCancel()
+        }}>
+            <DialogContent className="z-[60] max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Загрузка файла</DialogTitle>
+                    <DialogDescription>Выберите файл и настройте доступ перед загрузкой.</DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-5">
+                    <div
+                        onDragEnter={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onDragActiveChange(true)
+                        }}
+                        onDragLeave={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onDragActiveChange(false)
+                        }}
+                        onDragOver={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onDragActiveChange(true)
+                        }}
+                        onDrop={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onDragActiveChange(false)
+                            onChoose(event.dataTransfer.files)
+                        }}
+                        className={`flex min-h-36 flex-col items-center justify-center rounded-3xl border border-dashed p-5 text-center transition ${dragActive ? "border-primary bg-primary/10" : "bg-muted/30 hover:bg-muted/50"}`}
+                    >
+                        <UploadCloud className="mb-3 size-9 text-primary" />
+                        <div className="font-medium">Перетащите файл сюда</div>
+                        <p className="mt-1 text-sm text-muted-foreground">или выберите файл с устройства</p>
+                        <Button className="mt-4" variant="outline" onClick={() => inputRef.current?.click()} disabled={isPending}>
+                            Выбрать файл
+                        </Button>
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            className="hidden"
+                            disabled={isPending}
+                            onChange={(event) => {
+                                onChoose(event.target.files)
+                                event.currentTarget.value = ""
                             }}
-                            className={`flex min-h-44 flex-col items-center justify-center rounded-3xl border border-dashed p-6 text-center transition ${dragActive ? "border-primary bg-primary/10" : "bg-muted/30 hover:bg-muted/50"}`}
-                        >
-                            <UploadCloud className="mb-3 size-9 text-primary" />
-                            <div className="font-medium">Перетащите файл сюда</div>
-                            <p className="mt-1 text-sm text-muted-foreground">или выберите файл с устройства</p>
-                            <Button className="mt-4" variant="outline" onClick={() => inputRef.current?.click()} disabled={isPending}>
-                                Выбрать файл
-                            </Button>
-                            <input
-                                ref={inputRef}
-                                type="file"
-                                className="hidden"
-                                disabled={isPending}
-                                onChange={(event) => {
-                                    onChoose(event.target.files?.item(0))
-                                    event.currentTarget.value = ""
-                                }}
-                            />
+                        />
+                    </div>
+
+                    {selectedFile ? (
+                        <div className="rounded-2xl border bg-card/60 p-3 text-sm">
+                            <div className="break-words font-medium">{selectedFile.name}</div>
+                            <div className="mt-1 text-muted-foreground">{sizeLabel(selectedFile.size)} · {selectedFile.type || "тип не определён"}</div>
                         </div>
+                    ) : null}
 
-                        {selectedFile ? (
-                            <div className="rounded-2xl border bg-card/60 p-3 text-sm">
-                                <div className="font-medium">{selectedFile.name}</div>
-                                <div className="mt-1 text-muted-foreground">{sizeLabel(selectedFile.size)} · {selectedFile.type || "тип не определён"}</div>
-                            </div>
-                        ) : null}
+                    <div className="space-y-2">
+                        <Label>Название</Label>
+                        <Input value={title} onChange={(event) => onTitleChange(event.target.value)} placeholder="Например: demo-report.pdf" />
+                        <p className="text-xs text-muted-foreground">Если оставить пустым, название будет взято из имени файла.</p>
+                    </div>
 
-                        <div className="space-y-2">
-                            <Label>Название</Label>
-                            <Input value={title} onChange={(event) => onTitleChange(event.target.value)} placeholder="Например: demo-report.pdf" />
-                            <p className="text-xs text-muted-foreground">Если оставить пустым, название будет взято из имени файла.</p>
-                        </div>
+                    <div className="space-y-2">
+                        <Label>Доступ</Label>
+                        <Select value={visibility} onValueChange={(value) => onVisibilityChange(value as "private" | "public")}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="private">Приватный</SelectItem>
+                                <SelectItem value="public">Публичный</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                        <div className="space-y-2">
-                            <Label>Доступ</Label>
-                            <Select value={visibility} onValueChange={(value) => onVisibilityChange(value as "private" | "public")}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="private">Приватный</SelectItem>
-                                    <SelectItem value="public">Публичный</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    {visibility === "public" ? (
+                        <Alert>
+                            <ShieldAlert className="size-4" />
+                            <AlertDescription>{PUBLIC_WARNING}</AlertDescription>
+                        </Alert>
+                    ) : null}
 
-                        {visibility === "public" ? (
-                            <Alert>
-                                <ShieldAlert className="size-4" />
-                                <AlertDescription>{PUBLIC_WARNING}</AlertDescription>
-                            </Alert>
-                        ) : null}
-
-                        <div className="grid gap-2 text-sm sm:grid-cols-2">
-                            <LimitChip label="Максимум файла" value={meta ? sizeLabel(meta.max_file_bytes) : "—"} />
-                            <LimitChip label="Свободно места" value={meta ? sizeLabel(freeBytes) : "—"} />
-                            <LimitChip label="Лимит файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} />
-                            <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
-                        </div>
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                        <LimitChip label="Максимум файла" value={meta ? sizeLabel(meta.max_file_bytes) : "—"} />
+                        <LimitChip label="Свободно места" value={meta ? sizeLabel(freeBytes) : "—"} />
+                        <LimitChip label="Лимит файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} />
+                        <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
                     </div>
                 </ScrollArea>
                 <SheetFooter className="border-t">
@@ -582,6 +644,91 @@ function UploadSheet({
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+    )
+}
+
+function LimitChip({ label, value }: { label: string; value: string }) {
+    return <div className="rounded-xl bg-muted/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="font-medium">{value}</div></div>
+}
+
+function FileItem(props: {
+    file: UserFile
+    view: "grid" | "list"
+    onCopy: () => void
+    onDownload: () => void
+    onEdit: () => void
+    onToggleVisibility: () => void
+    onDelete: () => void
+}) {
+    const content = props.view === "grid" ? <FileGridCard {...props} /> : <FileRow {...props} />
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
+            <ContextMenuContent>
+                <FileMenuItems variant="context" {...props} />
+            </ContextMenuContent>
+        </ContextMenu>
+    )
+}
+
+function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+    return (
+        <div className="group flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80 sm:flex-row sm:items-center sm:justify-between">
+            <FileIdentity file={file} />
+            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                <VisibilityBadge file={file} />
+                <Button size="sm" variant="outline" asChild>
+                    <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
+                </Button>
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+            </div>
+        </div>
+    )
+}
+
+function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+    const Icon = fileIcon(file.kind)
+    return (
+        <div className="group relative min-w-0 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80">
+            <div className="absolute right-3 top-3 z-10">
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+            </div>
+            <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-muted/50 text-primary">
+                {file.kind === "image" && file.preview_url ? (
+                    <Image src={file.preview_url} alt="" width={320} height={180} unoptimized className="size-full object-cover" />
+                ) : <Icon className="size-9" />}
+            </div>
+            <div className="min-w-0 space-y-2">
+                <div className="line-clamp-2 min-h-10 font-medium">{file.title || file.original_name}</div>
+                <div className="text-xs text-muted-foreground">{sizeLabel(file.size)} · {dateLabel(file.created_at)}</div>
+                <div className="flex items-center justify-between gap-2">
+                    <VisibilityBadge file={file} />
+                    <Button size="sm" variant="outline" asChild>
+                        <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
+                    </Button>
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={onCancel}>Отмена</Button>
+                    <Button disabled={!canUpload} onClick={onSubmit}>
+                        {isPending ? <Loader2 className="size-4 animate-spin" /> : null} Загрузить
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function FullscreenDragOverlay({ visible }: { visible: boolean }) {
+    if (!visible) return null
+
+    return (
+        <div className="pointer-events-none fixed inset-3 z-[55] flex items-center justify-center rounded-4xl border border-dashed border-primary/70 bg-background/45 p-4 text-center shadow-2xl backdrop-blur-[1px]">
+            <div className="rounded-3xl border bg-card/90 px-6 py-5 text-foreground shadow-xl">
+                <UploadCloud className="mx-auto mb-3 size-10 text-primary" />
+                <div className="font-medium">Отпустите файл в любом месте, чтобы выбрать его</div>
+            </div>
+        </div>
     )
 }
 
