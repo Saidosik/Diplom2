@@ -96,8 +96,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'error' => 'Не удалось создать токен',
-                'message' => $e->getMessage(),
-                'exception' => get_class($e),
+                'message' => 'Не удалось создать токен',
             ], 500);
         }
 
