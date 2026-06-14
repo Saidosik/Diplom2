@@ -49,3 +49,31 @@ export type RunCodePayload = {
     snippet_status?: "draft" | "active"
     snippet_id?: number
 }
+
+
+export type UserFile = {
+    id: number
+    original_name: string
+    extension?: string | null
+    mime_type?: string | null
+    size?: number | null
+    kind?: string | null
+    created_at?: string | null
+    updated_at?: string | null
+}
+
+export type UserFilePreview = {
+    id?: number
+    content?: string | null
+    truncated?: boolean
+    mime_type?: string | null
+    original_name?: string | null
+}
+
+export type CodeTemplate = {
+    id: string
+    title: string
+    language: string
+    code: string
+    stdin?: string
+}
