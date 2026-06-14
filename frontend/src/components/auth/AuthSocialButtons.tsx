@@ -41,14 +41,14 @@ const AuthSocialButtons = ({ providers, onProviderClick }: AuthButtonsProps) => 
     return (
         <div className="flex flex-col gap-4 w-full">
             <div className="relative flex items-center">
-                <div className="grow border-t-2 border-muted"></div>
-                <span className="mx-4 shrink text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+                <div className="grow border-t border-white/10"></div>
+                <span className="mx-4 shrink text-[10px] uppercase tracking-widest text-slate-500 font-medium">
                     Войти через
                 </span>
-                <div className="grow border-t-2 border-muted"></div>
+                <div className="grow border-t border-white/10"></div>
             </div>
 
-            <div className="flex items-center justify-center gap-4">
+            <div className="grid grid-cols-3 gap-3">
                 {providers.map((name) => {
                     const provider = providerData[name];
                     if (!provider) return null;
@@ -59,11 +59,12 @@ const AuthSocialButtons = ({ providers, onProviderClick }: AuthButtonsProps) => 
                         <Button
                             key={name}
                             variant="outline"
-                            className="group h-14 w-14 transition-all duration-300 hover:bg-accent"
+                            className="group h-11 w-full rounded-xl border-white/10 bg-[#0c1711] text-slate-100 transition-all duration-300 hover:border-primary/50 hover:bg-primary/10"
                             onClick={() => handleDefaultClick(name)}
                             title={`Войти через ${provider.label}`}
                         >
-                            <Icon className="filter grayscale opacity-60 size-10 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100" />
+                            <Icon className="size-5 opacity-75 transition-all duration-300 group-hover:opacity-100" />
+                            <span className="sr-only">{provider.label}</span>
                         </Button>
                     );
                 })}

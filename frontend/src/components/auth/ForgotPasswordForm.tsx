@@ -1,5 +1,6 @@
 "use client"
 import * as React from "react"
+import Link from "next/link"
 import { useForm } from "@tanstack/react-form"
 
 import { Button } from "@/components/ui/button"
@@ -83,10 +84,11 @@ export function ForgotPasswordForm() {
     return (
 
 
-        <Card className="w-full sm:max-w-md ">
+        <>
+        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
             <CardHeader>
-                <CardTitle><h1>Сброс Пароля</h1></CardTitle>
-                <CardDescription className="w-100">Мы вышлем вам на почту письмо, перейдя по ссылке вы сможете сбросить пароль или войдите используя сторонние сервисы</CardDescription>
+                <CardTitle><h1>Восстановление пароля</h1></CardTitle>
+                <CardDescription className="w-100 text-slate-400">Укажите email аккаунта — отправим ссылку для сброса пароля.</CardDescription>
             </CardHeader>
             <CardContent>
                 <form
@@ -126,9 +128,9 @@ export function ForgotPasswordForm() {
             <CardFooter>
 
                 <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="ForgotPasswordForm" className="mx-auto">
+                    <Button type="submit" disabled={isSubmitting} form="ForgotPasswordForm" className="w-full">
                         {
-                            isSubmitting ? "Отправка" : "отправить"
+                            isSubmitting ? "Отправляем" : "Отправить ссылку"
                         }
                         {
                             isSubmitting ? <LoaderCircle className="animate-spin" /> : ''
@@ -151,8 +153,10 @@ export function ForgotPasswordForm() {
             </CardFooter>
 
         </Card>
-
-
+        <p className="mt-4 text-center text-sm text-slate-400">
+            Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
+        </p>
+        </>
 
     )
 }
