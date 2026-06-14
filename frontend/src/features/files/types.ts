@@ -1,3 +1,14 @@
+export type FileFolder = {
+    id: number
+    name: string
+    color?: string | null
+    icon?: string | null
+    sort_order?: number
+    files_count?: number
+    created_at?: string | null
+    updated_at?: string | null
+}
+
 export type UserFile = {
     id: number
     title?: string | null
@@ -6,6 +17,10 @@ export type UserFile = {
     size: number
     kind: "image" | "video" | "audio" | "pdf" | "archive" | "text" | "file" | string
     visibility: "private" | "public"
+    folder_id?: number | null
+    folder?: Pick<FileFolder, "id" | "name" | "color" | "icon"> | null
+    is_pinned?: boolean
+    pinned_at?: string | null
     is_owner?: boolean
     can_preview?: boolean
     can_download?: boolean

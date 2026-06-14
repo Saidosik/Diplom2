@@ -10,6 +10,7 @@ import {
     Download,
     Eye,
     FileCog,
+    FolderPlus,
     FolderOpen,
     Grid2X2,
     Info,
@@ -17,6 +18,8 @@ import {
     Loader2,
     MoreHorizontal,
     Pencil,
+    Pin,
+    PinOff,
     Search,
     ShieldAlert,
     Trash2,
@@ -80,15 +83,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { deleteMyFile, getMyFiles, updateMyFile, uploadMyFile } from "@/features/files/api"
-import type { UserFile, UserFileStorageMeta } from "@/features/files/types"
+import { createFolder, deleteFolder, deleteMyFile, fetchFolders, getMyFiles, moveFileToFolder, toggleFilePinned, updateFolder, updateMyFile, uploadMyFile } from "@/features/files/api"
+import type { FileFolder, UserFile, UserFileStorageMeta } from "@/features/files/types"
 import { absoluteShareUrl, dateLabel, fileIcon, kindLabels, sizeLabel } from "./file-utils"
 
-type FileAction = "download" | "delete" | "publish"
+type FileAction = "download" | "delete" | "publish" | "delete-folder"
+type SmartFilter = "all" | "pinned" | "public" | "unfiled" | "folder"
 
 type PendingAction = {
     type: FileAction
-    file: UserFile
+    file?: UserFile
+    folder?: FileFolder
 }
 
 const PUBLIC_WARNING = "Файл станет доступен другим пользователям по ссылке. Не публикуйте персональные данные, пароли, токены, ключи API и приватные документы."
@@ -104,21 +109,41 @@ export function FilesPage() {
     const [view, setView] = useState<"grid" | "list">("list")
     const [uploadOpen, setUploadOpen] = useState(false)
     const [commandOpen, setCommandOpen] = useState(false)
+    const [selectedSmartFilter, setSelectedSmartFilter] = useState<SmartFilter>("all")
+    const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
     const [uploadVisibility, setUploadVisibility] = useState<"private" | "public">("private")
     const [uploadTitle, setUploadTitle] = useState("")
+    const [uploadFolderId, setUploadFolderId] = useState<number | null>(null)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [dragActive, setDragActive] = useState(false)
     const [editingFile, setEditingFile] = useState<UserFile | null>(null)
     const [editTitle, setEditTitle] = useState("")
     const [editVisibility, setEditVisibility] = useState<"private" | "public">("private")
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+    const [movingFile, setMovingFile] = useState<UserFile | null>(null)
+    const [moveFolderId, setMoveFolderId] = useState<number | null>(null)
+    const [folderDialogOpen, setFolderDialogOpen] = useState(false)
+    const [editingFolder, setEditingFolder] = useState<FileFolder | null>(null)
+    const [folderName, setFolderName] = useState("")
+    const [folderColor, setFolderColor] = useState("#7c3aed")
+
+    const folderQuery = useQuery({
+        queryKey: ["file-folders"],
+        queryFn: fetchFolders,
+    })
+    const folders = folderQuery.data ?? []
+    const folderParam = selectedSmartFilter === "folder" && selectedFolderId ? selectedFolderId : selectedSmartFilter === "unfiled" ? "none" : undefined
+    const pinnedParam = selectedSmartFilter === "pinned" ? true : undefined
+    const visibilityParam = selectedSmartFilter === "public" ? "public" : visibility === "all" ? undefined : visibility
 
     const filesQuery = useQuery({
-        queryKey: ["files", q, kind, visibility, sort],
+        queryKey: ["files", q, kind, visibilityParam, sort, folderParam, pinnedParam],
         queryFn: () => getMyFiles({
             q: q || undefined,
             kind: kind === "all" ? undefined : kind,
-            visibility: visibility === "all" ? undefined : visibility,
+            visibility: visibilityParam,
+            folder_id: folderParam,
+            pinned: pinnedParam,
             sort,
             per_page: 60,
         }),
@@ -147,6 +172,7 @@ export function FilesPage() {
             setUploadOpen(false)
             resetUploadForm()
             queryClient.invalidateQueries({ queryKey: ["files"] })
+            queryClient.invalidateQueries({ queryKey: ["file-folders"] })
         },
         onError: (error: Error) => toast.error(error.message),
     })
@@ -171,6 +197,51 @@ export function FilesPage() {
         onError: (error: Error) => toast.error(error.message),
     })
 
+    const folderMutation = useMutation({
+        mutationFn: (payload: { id?: number; name: string; color?: string | null }) => payload.id ? updateFolder(payload.id, payload) : createFolder(payload),
+        onSuccess: () => {
+            toast.success(editingFolder ? "Папка обновлена" : "Папка создана")
+            setFolderDialogOpen(false)
+            setEditingFolder(null)
+            setFolderName("")
+            queryClient.invalidateQueries({ queryKey: ["file-folders"] })
+        },
+        onError: (error: Error) => toast.error(error.message),
+    })
+
+    const deleteFolderMutation = useMutation({
+        mutationFn: deleteFolder,
+        onSuccess: (payload) => {
+            toast.success(payload.message)
+            setPendingAction(null)
+            setSelectedSmartFilter("all")
+            setSelectedFolderId(null)
+            queryClient.invalidateQueries({ queryKey: ["files"] })
+            queryClient.invalidateQueries({ queryKey: ["file-folders"] })
+        },
+        onError: (error: Error) => toast.error(error.message),
+    })
+
+    const moveMutation = useMutation({
+        mutationFn: ({ id, folderId }: { id: number; folderId: number | null }) => moveFileToFolder(id, folderId),
+        onSuccess: () => {
+            toast.success("Файл перемещён")
+            setMovingFile(null)
+            queryClient.invalidateQueries({ queryKey: ["files"] })
+            queryClient.invalidateQueries({ queryKey: ["file-folders"] })
+        },
+        onError: (error: Error) => toast.error(error.message),
+    })
+
+    const pinMutation = useMutation({
+        mutationFn: ({ id, pinned }: { id: number; pinned: boolean }) => toggleFilePinned(id, pinned),
+        onSuccess: (file) => {
+            toast.success(file.is_pinned ? "Файл закреплён" : "Файл откреплён")
+            queryClient.invalidateQueries({ queryKey: ["files"] })
+        },
+        onError: (error: Error) => toast.error(error.message),
+    })
+
     const freeBytes = meta ? Math.max(meta.quota_bytes - meta.used_bytes, 0) : 0
 
     function resetFilters() {
@@ -178,11 +249,14 @@ export function FilesPage() {
         setKind("all")
         setVisibility("all")
         setSort("newest")
+        setSelectedSmartFilter("all")
+        setSelectedFolderId(null)
     }
 
     function resetUploadForm() {
         setUploadTitle("")
         setUploadVisibility("private")
+        setUploadFolderId(null)
         setSelectedFile(null)
         setDragActive(false)
     }
@@ -196,12 +270,18 @@ export function FilesPage() {
         }
     }, [])
 
+    function openUploadDialog() {
+        setUploadFolderId(selectedSmartFilter === "folder" ? selectedFolderId : null)
+        setUploadOpen(true)
+    }
+
     function submitUpload() {
         if (!selectedFile) return
         uploadMutation.mutate({
             file: selectedFile,
             title: uploadTitle.trim() || undefined,
             visibility: uploadVisibility,
+            folder_id: uploadFolderId,
         })
     }
 
@@ -246,6 +326,11 @@ export function FilesPage() {
 
     function runPendingAction() {
         if (!pendingAction) return
+        if (pendingAction.type === "delete-folder" && pendingAction.folder) {
+            deleteFolderMutation.mutate(pendingAction.folder.id)
+            return
+        }
+        if (!pendingAction.file) return
         if (pendingAction.type === "download") {
             if (pendingAction.file.download_url) window.location.href = pendingAction.file.download_url
             setPendingAction(null)
@@ -257,6 +342,33 @@ export function FilesPage() {
             return
         }
         deleteMutation.mutate(pendingAction.file.id)
+    }
+
+    function selectSmartFilter(next: SmartFilter, folderId: number | null = null) {
+        setSelectedSmartFilter(next)
+        setSelectedFolderId(folderId)
+    }
+
+    function openCreateFolderDialog() {
+        setEditingFolder(null)
+        setFolderName("")
+        setFolderColor("#7c3aed")
+        setFolderDialogOpen(true)
+    }
+
+    function openEditFolderDialog(folder: FileFolder) {
+        setEditingFolder(folder)
+        setFolderName(folder.name)
+        setFolderColor(folder.color || "#7c3aed")
+        setFolderDialogOpen(true)
+    }
+
+    function saveFolder() {
+        if (!folderName.trim()) {
+            toast.error("Название папки обязательно.")
+            return
+        }
+        folderMutation.mutate({ id: editingFolder?.id, name: folderName.trim(), color: folderColor })
     }
 
     useEffect(() => {
@@ -328,7 +440,7 @@ export function FilesPage() {
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span className="w-full lg:w-auto">
-                                    <Button className="w-full lg:w-auto" disabled={quotaFull} onClick={() => setUploadOpen(true)}>
+                                    <Button className="w-full lg:w-auto" disabled={quotaFull} onClick={openUploadDialog}>
                                         <UploadCloud className="size-4" /> Загрузить файл
                                     </Button>
                                 </span>
@@ -348,8 +460,19 @@ export function FilesPage() {
                     </Alert>
                 ) : null}
 
-                <Card className="overflow-hidden">
-                    <CardHeader className="gap-4">
+                <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+                    <FolderPanel
+                        folders={folders}
+                        selectedSmartFilter={selectedSmartFilter}
+                        selectedFolderId={selectedFolderId}
+                        onSelect={selectSmartFilter}
+                        onCreate={openCreateFolderDialog}
+                        onEdit={openEditFolderDialog}
+                        onDelete={(folder) => setPendingAction({ type: "delete-folder", folder })}
+                    />
+
+                    <Card className="overflow-hidden">
+                        <CardHeader className="gap-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
                                 <CardTitle>Библиотека</CardTitle>
@@ -423,16 +546,19 @@ export function FilesPage() {
                                         onDownload={() => requestDownload(file)}
                                         onEdit={() => openEdit(file)}
                                         onToggleVisibility={() => requestVisibility(file)}
+                                        onTogglePinned={() => pinMutation.mutate({ id: file.id, pinned: !file.is_pinned })}
+                                        onMove={() => { setMovingFile(file); setMoveFolderId(file.folder_id ?? null) }}
                                         onDelete={() => setPendingAction({ type: "delete", file })}
                                     />
                                 ))}
                             </div>
                         ) : null}
                         {!filesQuery.isLoading && !files.length ? (
-                            <EmptyState hasFilters={hasFilters} onReset={resetFilters} onUpload={() => setUploadOpen(true)} />
+                            <EmptyState hasFilters={hasFilters} smartFilter={selectedSmartFilter} onReset={resetFilters} onUpload={openUploadDialog} />
                         ) : null}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                </div>
 
                 <UploadDialog
                     open={uploadOpen}
@@ -441,6 +567,8 @@ export function FilesPage() {
                     selectedFile={selectedFile}
                     title={uploadTitle}
                     visibility={uploadVisibility}
+                    folderId={uploadFolderId}
+                    folders={folders}
                     meta={meta}
                     freeBytes={freeBytes}
                     dragActive={dragActive}
@@ -449,6 +577,7 @@ export function FilesPage() {
                     onChoose={chooseUploadFiles}
                     onTitleChange={setUploadTitle}
                     onVisibilityChange={setUploadVisibility}
+                    onFolderChange={setUploadFolderId}
                     onDragActiveChange={setDragActive}
                     onSubmit={submitUpload}
                 />
@@ -464,15 +593,38 @@ export function FilesPage() {
                     onSubmit={saveEdit}
                 />
 
+                <MoveFileDialog
+                    file={movingFile}
+                    folders={folders}
+                    folderId={moveFolderId}
+                    isPending={moveMutation.isPending}
+                    onOpenChange={(open) => !open && setMovingFile(null)}
+                    onFolderChange={setMoveFolderId}
+                    onSubmit={() => movingFile && moveMutation.mutate({ id: movingFile.id, folderId: moveFolderId })}
+                />
+
+                <FolderDialog
+                    open={folderDialogOpen}
+                    folder={editingFolder}
+                    name={folderName}
+                    color={folderColor}
+                    isPending={folderMutation.isPending}
+                    onOpenChange={setFolderDialogOpen}
+                    onNameChange={setFolderName}
+                    onColorChange={setFolderColor}
+                    onSubmit={saveFolder}
+                />
+
                 <FilesCommandDialog
                     open={commandOpen}
                     onOpenChange={setCommandOpen}
                     files={files}
-                    onUpload={() => { setUploadOpen(true); setCommandOpen(false) }}
+                    onUpload={() => { openUploadDialog(); setCommandOpen(false) }}
                     onReset={resetFilters}
                     setKind={setKind}
                     setVisibility={setVisibility}
                     setSort={setSort}
+                    setSmartFilter={(filter) => selectSmartFilter(filter)}
                 />
 
                 <ActionAlertDialog
@@ -485,6 +637,64 @@ export function FilesPage() {
                 <FullscreenDragOverlay visible={uploadOpen && dragActive} />
             </div>
         </TooltipProvider>
+    )
+}
+
+function FolderPanel({ folders, selectedSmartFilter, selectedFolderId, onSelect, onCreate, onEdit, onDelete }: {
+    folders: FileFolder[]
+    selectedSmartFilter: SmartFilter
+    selectedFolderId: number | null
+    onSelect: (filter: SmartFilter, folderId?: number | null) => void
+    onCreate: () => void
+    onEdit: (folder: FileFolder) => void
+    onDelete: (folder: FileFolder) => void
+}) {
+    const itemClass = (active: boolean) => `flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${active ? "bg-primary/10 text-primary" : "hover:bg-muted/60"}`
+    return (
+        <Card className="h-fit lg:sticky lg:top-4">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base">Библиотека</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+                    <button className={itemClass(selectedSmartFilter === "all")} onClick={() => onSelect("all", null)}><span>Все файлы</span></button>
+                    <button className={itemClass(selectedSmartFilter === "pinned")} onClick={() => onSelect("pinned", null)}><span className="inline-flex items-center gap-2"><Pin className="size-4" />Закреплённые</span></button>
+                    <button className={itemClass(selectedSmartFilter === "public")} onClick={() => onSelect("public", null)}><span>Публичные</span></button>
+                    <button className={itemClass(selectedSmartFilter === "unfiled")} onClick={() => onSelect("unfiled", null)}><span>Без папки</span></button>
+                </div>
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Папки</div>
+                        <Button size="icon-sm" variant="ghost" onClick={onCreate} aria-label="Создать папку"><FolderPlus className="size-4" /></Button>
+                    </div>
+                    {folders.length ? (
+                        <div className="space-y-1">
+                            {folders.map((folder) => (
+                                <div key={folder.id} className="group flex items-center gap-1">
+                                    <button className={itemClass(selectedSmartFilter === "folder" && selectedFolderId === folder.id)} onClick={() => onSelect("folder", folder.id)}>
+                                        <span className="flex min-w-0 items-center gap-2"><span className="size-2.5 rounded-full" style={{ backgroundColor: folder.color || "#7c3aed" }} /><span className="truncate">{folder.name}</span></span>
+                                        <span className="text-xs text-muted-foreground">{folder.files_count ?? 0}</span>
+                                    </button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label="Действия с папкой"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onSelect={() => onEdit(folder)}>Редактировать</DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem variant="destructive" onSelect={() => onDelete(folder)}>Удалить папку</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                            <div>Папок пока нет</div>
+                            <Button className="mt-2" size="sm" variant="outline" onClick={onCreate}>Создать папку</Button>
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
     )
 }
 
@@ -514,6 +724,8 @@ function UploadDialog({
     selectedFile,
     title,
     visibility,
+    folderId,
+    folders,
     meta,
     freeBytes,
     dragActive,
@@ -522,6 +734,7 @@ function UploadDialog({
     onChoose,
     onTitleChange,
     onVisibilityChange,
+    onFolderChange,
     onDragActiveChange,
     onSubmit,
 }: {
@@ -531,6 +744,8 @@ function UploadDialog({
     selectedFile: File | null
     title: string
     visibility: "private" | "public"
+    folderId: number | null
+    folders: FileFolder[]
     meta?: UserFileStorageMeta
     freeBytes: number
     dragActive: boolean
@@ -539,6 +754,7 @@ function UploadDialog({
     onChoose: (files: FileList | null) => void
     onTitleChange: (value: string) => void
     onVisibilityChange: (value: "private" | "public") => void
+    onFolderChange: (value: number | null) => void
     onDragActiveChange: (active: boolean) => void
     onSubmit: () => void
 }) {
@@ -620,6 +836,31 @@ function UploadDialog({
                                 <SelectItem value="public">Публичный</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Папка</Label>
+                        <Select value={folderId ? String(folderId) : "none"} onValueChange={(value) => onFolderChange(value === "none" ? null : Number(value))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Без папки</SelectItem>
+                                {folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {visibility === "public" ? (
+                        <Alert>
+                            <ShieldAlert className="size-4" />
+                            <AlertDescription>{PUBLIC_WARNING}</AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                        <LimitChip label="Максимум файла" value={meta ? sizeLabel(meta.max_file_bytes) : "—"} />
+                        <LimitChip label="Свободно места" value={meta ? sizeLabel(freeBytes) : "—"} />
+                        <LimitChip label="Лимит файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} />
+                        <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
                     </div>
 
                     {visibility === "public" ? (
@@ -743,6 +984,8 @@ function FileItem(props: {
     onDownload: () => void
     onEdit: () => void
     onToggleVisibility: () => void
+    onTogglePinned: () => void
+    onMove: () => void
     onDelete: () => void
 }) {
     const content = props.view === "grid" ? <FileGridCard {...props} /> : <FileRow {...props} />
@@ -756,7 +999,7 @@ function FileItem(props: {
     )
 }
 
-function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
     return (
         <div className="group flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80 sm:flex-row sm:items-center sm:justify-between">
             <FileIdentity file={file} />
@@ -765,18 +1008,18 @@ function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelet
                 <Button size="sm" variant="outline" asChild>
                     <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
                 </Button>
-                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
             </div>
         </div>
     )
 }
 
-function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
     const Icon = fileIcon(file.kind)
     return (
         <div className="group relative min-w-0 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80">
             <div className="absolute right-3 top-3 z-10">
-                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
             </div>
             <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-muted/50 text-primary">
                 {file.kind === "image" && file.preview_url ? (
@@ -784,7 +1027,7 @@ function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, on
                 ) : <Icon className="size-9" />}
             </div>
             <div className="min-w-0 space-y-2">
-                <div className="line-clamp-2 min-h-10 font-medium">{file.title || file.original_name}</div>
+                <div className="line-clamp-2 min-h-10 font-medium">{file.is_pinned ? "📌 " : ""}{file.title || file.original_name}</div>
                 <div className="text-xs text-muted-foreground">{sizeLabel(file.size)} · {dateLabel(file.created_at)}</div>
                 <div className="flex items-center justify-between gap-2">
                     <VisibilityBadge file={file} />
@@ -808,7 +1051,7 @@ function FileIdentity({ file }: { file: UserFile }) {
                 ) : <Icon className="size-5" />}
             </div>
             <div className="min-w-0">
-                <div className="truncate font-medium">{file.title || file.original_name}</div>
+                <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-medium">{file.title || file.original_name}</span>{file.is_pinned ? <Pin className="size-3.5 shrink-0 text-primary" /> : null}</div>
                 {showOriginal ? <div className="truncate text-xs text-muted-foreground">{file.original_name}</div> : null}
                 <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                     <span>{file.mime_type || kindLabels[file.kind] || file.kind}</span>
@@ -848,7 +1091,7 @@ function FileDropdown(props: Omit<Parameters<typeof FileItem>[0], "view">) {
     )
 }
 
-function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view"> & { variant: "dropdown" | "context" }) {
+function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view"> & { variant: "dropdown" | "context" }) {
     const Item = variant === "dropdown" ? DropdownMenuItem : ContextMenuItem
     const Separator = variant === "dropdown" ? DropdownMenuSeparator : ContextMenuSeparator
     return (
@@ -857,6 +1100,8 @@ function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisi
             <Item onSelect={onDownload}><Download className="size-4" /> Скачать</Item>
             {file.visibility === "public" ? <Item onSelect={onCopy}><Copy className="size-4" /> Скопировать ссылку</Item> : null}
             <Item onSelect={onEdit}><Pencil className="size-4" /> Переименовать / Настройки</Item>
+            <Item onSelect={onTogglePinned}>{file.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />} {file.is_pinned ? "Открепить" : "Закрепить"}</Item>
+            <Item onSelect={onMove}><FolderOpen className="size-4" /> Переместить в папку</Item>
             <Item onSelect={onToggleVisibility}><FileCog className="size-4" /> {file.visibility === "public" ? "Сделать приватным" : "Опубликовать"}</Item>
             <Item asChild><Link href={`/files/${file.id}`}><Info className="size-4" /> Показать сведения</Link></Item>
             <Separator />
@@ -872,13 +1117,13 @@ function FileSkeleton({ view }: { view: "grid" | "list" }) {
     return <div className="space-y-2">{Array.from({ length: 7 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-2xl" />)}</div>
 }
 
-function EmptyState({ hasFilters, onReset, onUpload }: { hasFilters: boolean; onReset: () => void; onUpload: () => void }) {
+function EmptyState({ hasFilters, smartFilter, onReset, onUpload }: { hasFilters: boolean; smartFilter: SmartFilter; onReset: () => void; onUpload: () => void }) {
     return (
         <Empty className="border">
             <EmptyHeader>
                 <EmptyMedia variant="icon"><FolderOpen className="size-5" /></EmptyMedia>
-                <EmptyTitle>{hasFilters ? "Ничего не найдено" : "Файлов пока нет"}</EmptyTitle>
-                <EmptyDescription>{hasFilters ? "Попробуйте изменить поиск, тип файла или фильтр доступа." : "Загрузите первый файл, чтобы использовать его в чатах, публикациях и AI-помощнике."}</EmptyDescription>
+                <EmptyTitle>{smartFilter === "pinned" ? "Закреплённых файлов нет" : smartFilter === "folder" ? "В папке пока нет файлов" : hasFilters ? "Ничего не найдено" : "Файлов пока нет"}</EmptyTitle>
+                <EmptyDescription>{smartFilter === "pinned" ? "Закрепляйте важные файлы, чтобы быстро находить их здесь." : smartFilter === "folder" ? "Переместите сюда файлы или загрузите новый файл." : hasFilters ? "Попробуйте изменить поиск, тип файла или фильтр доступа." : "Загрузите первый файл, чтобы использовать его в чатах, публикациях и AI-помощнике."}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
                 <Button onClick={hasFilters ? onReset : onUpload}>{hasFilters ? "Сбросить фильтры" : "Загрузить файл"}</Button>
@@ -941,6 +1186,79 @@ function Meta({ label, value }: { label: string; value: string }) {
     return <div className="min-w-0"><div className="text-xs text-muted-foreground">{label}</div><div className="truncate font-medium">{value}</div></div>
 }
 
+function MoveFileDialog({ file, folders, folderId, isPending, onOpenChange, onFolderChange, onSubmit }: {
+    file: UserFile | null
+    folders: FileFolder[]
+    folderId: number | null
+    isPending: boolean
+    onOpenChange: (open: boolean) => void
+    onFolderChange: (folderId: number | null) => void
+    onSubmit: () => void
+}) {
+    if (!file) return null
+    return (
+        <Dialog open={Boolean(file)} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Переместить файл</DialogTitle>
+                    <DialogDescription>Выберите папку для файла “{file.title || file.original_name}”.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                    <Label>Папка</Label>
+                    <Select value={folderId ? String(folderId) : "none"} onValueChange={(value) => onFolderChange(value === "none" ? null : Number(value))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">Без папки</SelectItem>
+                            {folders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
+                    <Button onClick={onSubmit} disabled={isPending}>{isPending ? <Loader2 className="size-4 animate-spin" /> : null} Переместить</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function FolderDialog({ open, folder, name, color, isPending, onOpenChange, onNameChange, onColorChange, onSubmit }: {
+    open: boolean
+    folder: FileFolder | null
+    name: string
+    color: string
+    isPending: boolean
+    onOpenChange: (open: boolean) => void
+    onNameChange: (name: string) => void
+    onColorChange: (color: string) => void
+    onSubmit: () => void
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{folder ? "Редактировать папку" : "Новая папка"}</DialogTitle>
+                    <DialogDescription>Назовите папку и выберите цвет для панели файлов.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Название</Label>
+                        <Input value={name} onChange={(event) => onNameChange(event.target.value)} placeholder="Например: Диплом" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Цвет</Label>
+                        <Input value={color} onChange={(event) => onColorChange(event.target.value)} placeholder="#7c3aed" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
+                    <Button onClick={onSubmit} disabled={isPending}>{isPending ? <Loader2 className="size-4 animate-spin" /> : null} {folder ? "Сохранить" : "Создать"}</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 function FilesCommandDialog(props: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -950,6 +1268,7 @@ function FilesCommandDialog(props: {
     setKind: (value: string) => void
     setVisibility: (value: string) => void
     setSort: (value: string) => void
+    setSmartFilter: (value: SmartFilter) => void
 }) {
     const run = (action: () => void) => {
         action()
@@ -965,7 +1284,8 @@ function FilesCommandDialog(props: {
                     <CommandGroup heading="Команды">
                         <CommandItem onSelect={props.onUpload}><UploadCloud className="size-4" /> Загрузить файл <CommandShortcut>Enter</CommandShortcut></CommandItem>
                         <CommandItem onSelect={() => run(props.onReset)}><FolderOpen className="size-4" /> Показать все файлы</CommandItem>
-                        <CommandItem onSelect={() => run(() => props.setVisibility("public"))}>Показать публичные</CommandItem>
+                        <CommandItem onSelect={() => run(() => props.setSmartFilter("pinned"))}><Pin className="size-4" /> Показать закреплённые</CommandItem>
+                        <CommandItem onSelect={() => run(() => props.setSmartFilter("public"))}>Показать публичные</CommandItem>
                         <CommandItem onSelect={() => run(() => props.setVisibility("private"))}>Показать приватные</CommandItem>
                         <CommandItem onSelect={() => run(() => props.setKind("image"))}>Показать изображения</CommandItem>
                         <CommandItem onSelect={() => run(() => props.setKind("pdf"))}>Показать PDF</CommandItem>
@@ -997,19 +1317,22 @@ function FilesCommandDialog(props: {
 
 function ActionAlertDialog({ pendingAction, isDeleting, onOpenChange, onConfirm }: { pendingAction: PendingAction | null; isDeleting: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void }) {
     const isDelete = pendingAction?.type === "delete"
+    const isFolderDelete = pendingAction?.type === "delete-folder"
     const isPublish = pendingAction?.type === "publish"
     const isDownload = pendingAction?.type === "download"
-    const riskyOwnDownload = isDownload && pendingAction?.file.is_owner && ["archive", "file"].includes(pendingAction.file.kind)
+    const riskyOwnDownload = isDownload && pendingAction?.file?.is_owner && ["archive", "file"].includes(pendingAction.file.kind)
 
-    const title = isDelete ? "Удалить файл?" : isPublish ? "Сделать файл публичным?" : "Вы скачиваете файл другого пользователя"
-    const description = isDelete
-        ? "Файл будет удалён из хранилища. Это действие нельзя отменить."
-        : isPublish
-            ? PUBLIC_WARNING
-            : riskyOwnDownload
-                ? "Архивы и файлы неизвестного типа могут содержать небезопасное содержимое."
-                : DOWNLOAD_WARNING
-    const actionText = isDelete ? "Удалить" : isPublish ? "Сделать публичным" : "Скачать файл"
+    const title = isFolderDelete ? "Удалить папку?" : isDelete ? "Удалить файл?" : isPublish ? "Сделать файл публичным?" : "Вы скачиваете файл другого пользователя"
+    const description = isFolderDelete
+        ? "Папка будет удалена, но файлы останутся и переместятся в «Без папки»."
+        : isDelete
+            ? "Файл будет удалён из хранилища. Это действие нельзя отменить."
+            : isPublish
+                ? PUBLIC_WARNING
+                : riskyOwnDownload
+                    ? "Архивы и файлы неизвестного типа могут содержать небезопасное содержимое."
+                    : DOWNLOAD_WARNING
+    const actionText = isFolderDelete ? "Удалить папку" : isDelete ? "Удалить" : isPublish ? "Сделать публичным" : "Скачать файл"
 
     return (
         <AlertDialog open={Boolean(pendingAction)} onOpenChange={onOpenChange}>
@@ -1020,7 +1343,7 @@ function ActionAlertDialog({ pendingAction, isDeleting, onOpenChange, onConfirm 
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Отмена</AlertDialogCancel>
-                    <AlertDialogAction onClick={onConfirm} disabled={isDeleting} className={isDelete ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}>
+                    <AlertDialogAction onClick={onConfirm} disabled={isDeleting} className={isDelete || isFolderDelete ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}>
                         {isDeleting ? <Loader2 className="size-4 animate-spin" /> : null} {actionText}
                     </AlertDialogAction>
                 </AlertDialogFooter>
