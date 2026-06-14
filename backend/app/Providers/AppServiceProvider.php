@@ -109,8 +109,13 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        $trustedProxies = env('TRUSTED_PROXIES');
+        $trustedProxies = $trustedProxies
+            ? array_values(array_filter(array_map('trim', explode(',', $trustedProxies))))
+            : ['127.0.0.1', '172.16.0.0/12'];
+
         Request::setTrustedProxies(
-            ['0.0.0.0/0', '::/0'],
+            $trustedProxies,
             Request::HEADER_X_FORWARDED_FOR
                 | Request::HEADER_X_FORWARDED_HOST
                 | Request::HEADER_X_FORWARDED_PORT

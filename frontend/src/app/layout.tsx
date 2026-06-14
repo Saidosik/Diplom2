@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google"
 
 import { OAuthToastHandler } from "@/components/auth/oauth-toast-handler"
 
@@ -8,21 +7,6 @@ import { cn } from "@/lib/utils"
 import "./globals.css"
 import { AppProviders } from "@/components/providers/app-providers"
 import { Suspense } from "react"
-
-const geistSans = Geist({
-    subsets: ["latin"],
-    variable: "--font-sans",
-})
-
-const geistHeading = Geist_Mono({
-    subsets: ["latin"],
-    variable: "--font-heading",
-})
-
-const jetbrainsMono = JetBrains_Mono({
-    subsets: ["latin"],
-    variable: "--font-mono",
-})
 
 export const metadata: Metadata = {
     title: "Вектор",
@@ -38,13 +22,7 @@ export default function RootLayout({
         <html
             suppressHydrationWarning
             lang="ru"
-            className={cn(
-                "h-full antialiased",
-                geistSans.variable,
-                geistHeading.variable,
-                jetbrainsMono.variable,
-                "font-sans"
-            )}
+            className={cn("h-full font-sans antialiased")}
         >
             <body className="min-h-full bg-background text-foreground">
                 <AppProviders>
