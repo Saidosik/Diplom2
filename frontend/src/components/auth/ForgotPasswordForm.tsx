@@ -147,6 +147,10 @@ export function ForgotPasswordForm() {
                         </div>
                     )}
 
+                    <p className="text-center text-sm text-muted-foreground">
+                        Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
+                    </p>
+
                     <AuthSocialButtons providers={['google', 'yandex', 'github']} />
                 </Field>
 
