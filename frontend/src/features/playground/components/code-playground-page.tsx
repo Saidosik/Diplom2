@@ -257,69 +257,6 @@ export function CodePlaygroundPage() {
         toast.success("Сниппет будет сохранён при следующем запуске")
     }
 
-    function detectLanguage(name?: string | null, mime?: string | null) {
-        return languageByExtension[name?.split(".").pop()?.toLowerCase() ?? ""] ?? (mime?.includes("python") ? "python" : language)
-    }
-
-    function loadDocument(next: { title?: string; language?: string; code: string; stdin?: string }) {
-        setTitle(next.title ?? title)
-        setLanguage(next.language ?? language)
-        setCode(next.code)
-        if (next.stdin !== undefined) setStdin(next.stdin)
-        setCurrentSnippet(null)
-        setRun(null)
-        setAiExplanation(null)
-        setAiSources([])
-    }
-
-    async function importLocalFile(file: File) {
-        try {
-            loadDocument({ title: file.name.replace(/\.[^.]+$/, ""), language: detectLanguage(file.name, file.type), code: await file.text() })
-            toast.success("Файл импортирован")
-        } catch { toast.error("Не удалось прочитать файл") }
-    }
-
-    async function importUserFile(file: UserFile) {
-        try {
-            const preview = await previewUserFile(file.id)
-            loadDocument({ title: file.original_name, language: detectLanguage(file.original_name, file.mime_type), code: preview.content ?? "" })
-            if (preview.truncated) toast.warning("Файл был обрезан для предпросмотра")
-            toast.success("Файл загружен из менеджера")
-        } catch { toast.error("Не удалось импортировать файл") }
-    }
-
-    function downloadCode() {
-        const safe = (title || "playground").replace(/[^a-zа-яё0-9._-]+/gi, "-").replace(/^-+|-+$/g, "") || "playground"
-        const url = URL.createObjectURL(new Blob([code], { type: "text/plain;charset=utf-8" }))
-        const link = document.createElement("a")
-        link.href = url
-        link.download = `${safe}.${extensionByLanguage[language] ?? "txt"}`
-        link.click()
-        URL.revokeObjectURL(url)
-        toast.success("Файл скачан")
-    }
-
-    async function copyText(value: string, message: string) {
-        await navigator.clipboard.writeText(value)
-        toast.success(message)
-    }
-
-    function clearConsole() {
-        setRun(null)
-        setAiExplanation(null)
-        setAiSources([])
-        setConsoleTab("console")
-    }
-
-    function newFile() {
-        loadDocument({ title: "Новый файл", code: defaultCodeByLanguage[language] ?? "", stdin: "" })
-    }
-
-    function markSnippetForSave() {
-        setSaveSnippet(true)
-        toast.success("Сниппет будет сохранён при следующем запуске")
-    }
-
     function loadSnippet(snippet: CodeSnippet) {
         setTitle(snippet.title)
         setLanguage(snippet.language)
