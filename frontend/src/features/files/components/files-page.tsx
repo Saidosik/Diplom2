@@ -17,7 +17,6 @@ import {
     List,
     Loader2,
     MoreHorizontal,
-    Pencil,
     Pin,
     PinOff,
     Search,
@@ -1013,11 +1012,10 @@ function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisi
             <Item asChild><Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link></Item>
             <Item onSelect={onDownload}><Download className="size-4" /> Скачать</Item>
             {file.visibility === "public" ? <Item onSelect={onCopy}><Copy className="size-4" /> Скопировать ссылку</Item> : null}
-            <Item onSelect={onEdit}><Pencil className="size-4" /> Переименовать / Настройки</Item>
+            <Item onSelect={onEdit}><Info className="size-4" /> Подробнее</Item>
             <Item onSelect={onTogglePinned}>{file.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />} {file.is_pinned ? "Открепить" : "Закрепить"}</Item>
             <Item onSelect={onMove}><FolderOpen className="size-4" /> Переместить в папку</Item>
             <Item onSelect={onToggleVisibility}><FileCog className="size-4" /> {file.visibility === "public" ? "Сделать приватным" : "Опубликовать"}</Item>
-            <Item asChild><Link href={`/files/${file.id}`}><Info className="size-4" /> Показать сведения</Link></Item>
             <Separator />
             <Item variant="destructive" onSelect={onDelete}><Trash2 className="size-4" /> Удалить</Item>
         </>
@@ -1061,8 +1059,8 @@ function EditFileDialog(props: {
         <Dialog open={Boolean(props.file)} onOpenChange={props.onOpenChange}>
             <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>Настройки файла</DialogTitle>
-                    <DialogDescription>Измените название, доступ и проверьте сведения о файле.</DialogDescription>
+                    <DialogTitle>Сведения о файле</DialogTitle>
+                    <DialogDescription>Измените название, настройте доступ и проверьте метаданные файла.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-2">
@@ -1084,7 +1082,7 @@ function EditFileDialog(props: {
                         <Meta label="Оригинальное имя" value={props.file.original_name} />
                         <Meta label="Размер" value={sizeLabel(props.file.size)} />
                         <Meta label="MIME" value={props.file.mime_type || props.file.kind} />
-                        <Meta label="Дата" value={dateLabel(props.file.created_at)} />
+                        <Meta label="Дата загрузки" value={dateLabel(props.file.created_at)} />
                     </div>
                 </div>
                 <DialogFooter>
