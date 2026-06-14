@@ -26,6 +26,9 @@ return [
 
         'user_files' => [
             'max_file_kb' => (int) env('USER_FILE_MAX_FILE_KB', 20480),
+            'total_quota_mb' => (int) env('USER_FILE_TOTAL_QUOTA_MB', 500),
+            'max_files' => (int) env('USER_FILE_MAX_FILES', 100),
+            'max_public_files' => (int) env('USER_FILE_MAX_PUBLIC_FILES', 30),
             'allowed_mimetypes' => [
                 'image/jpeg',
                 'image/png',
