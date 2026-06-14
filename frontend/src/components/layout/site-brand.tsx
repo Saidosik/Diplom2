@@ -37,7 +37,7 @@ export function SiteBrand({
   const currentSize = sizeMap[size]
 
   return (
-    <Link href={href} className={cn("flex items-center gap-3", className)}>
+    <Link href={href} className={cn("flex min-w-0 items-center gap-3", className)}>
       <div
         className={cn(
           "flex shrink-0 items-center justify-center bg-primary text-primary-foreground shadow-sm",
@@ -47,7 +47,7 @@ export function SiteBrand({
         <Code2 className={currentSize.icon} />
       </div>
 
-      <span className={cn("font-semibold tracking-tight", currentSize.text, nameClassName)}>
+      <span className={cn("truncate font-semibold tracking-tight", currentSize.text, nameClassName)}>
         Вектор
       </span>
     </Link>

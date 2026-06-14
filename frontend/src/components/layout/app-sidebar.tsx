@@ -12,7 +12,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-    SidebarSeparator,
+    SidebarRail,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
 
@@ -25,33 +25,31 @@ export function AppSidebar({ user }: AppSidebarProps) {
     return (
         <Sidebar collapsible="icon" variant="sidebar">
             <SidebarHeader>
-                <div className="flex h-full min-w-0 items-center gap-2">
-                    <SidebarMenu className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                        <SidebarMenuItem>
-                            <SidebarMenuButton
-                                asChild
-                                size="lg"
-                                tooltip="Вектор"
-                                className="h-11 px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                            >
-                                <SiteBrand href="/" size="sm" className="gap-3" nameClassName="text-sm" />
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
-                    </SidebarMenu>
+                <SidebarMenu>
+                    <SidebarMenuItem className="flex items-center gap-2">
+                        <SidebarMenuButton
+                            asChild
+                            size="lg"
+                            tooltip="Вектор"
+                            className="min-w-0 flex-1 justify-start px-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:flex-none"
+                        >
+                            <SiteBrand href="/" size="sm" className="min-w-0 gap-3" nameClassName="text-sm" />
+                        </SidebarMenuButton>
 
-                    <SidebarTrigger className="ml-auto size-9 shrink-0 group-data-[collapsible=icon]:mx-auto" />
-                </div>
+                        <SidebarTrigger className="ml-auto size-9 shrink-0 group-data-[collapsible=icon]:hidden" />
+                    </SidebarMenuItem>
+                </SidebarMenu>
             </SidebarHeader>
 
             <SidebarContent>
                 <NavMain user={user} />
             </SidebarContent>
 
-            <SidebarSeparator />
-
             <SidebarFooter>
                 <SidebarUser user={user} />
             </SidebarFooter>
+
+            <SidebarRail />
         </Sidebar>
     )
 }

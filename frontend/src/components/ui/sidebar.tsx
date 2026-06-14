@@ -27,9 +27,9 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_STORAGE_KEY = "sidebar:open"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "260px"
+const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "20rem"
-const SIDEBAR_WIDTH_ICON = "72px"
+const SIDEBAR_WIDTH_ICON = "4.5rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -250,7 +250,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          "fixed inset-y-0 z-30 hidden h-dvh w-(--sidebar-width) border-sidebar-border bg-sidebar transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:border-r data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:border-l data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] group-data-[collapsible=icon]:w-(--sidebar-width-icon) md:flex",
+          "fixed inset-y-0 z-30 hidden h-dvh w-(--sidebar-width) border-sidebar-border bg-sidebar/95 backdrop-blur transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:border-r data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:border-l data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] group-data-[collapsible=icon]:w-(--sidebar-width-icon) md:flex",
           className
         )}
         {...props}
@@ -305,7 +305,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] after:bg-transparent hover:after:bg-sidebar-primary/40 sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
@@ -351,7 +351,7 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="sidebar-header"
       data-sidebar="header"
       className={cn(
-        "flex h-16 shrink-0 flex-col justify-center gap-2 border-b border-sidebar-border/70 px-3 py-0 [--radius:var(--radius-xl)]",
+        "flex h-16 shrink-0 flex-col justify-center gap-2 border-b border-sidebar-border/70 px-3 py-0 [--radius:var(--radius-xl)] group-data-[collapsible=icon]:px-2",
         className
       )}
       {...props}
@@ -364,7 +364,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn("flex shrink-0 flex-col gap-2 border-t border-sidebar-border/70 px-3 pb-4 pt-3", className)}
+      className={cn("flex shrink-0 flex-col gap-2 border-t border-sidebar-border/70 px-3 pb-4 pt-3 group-data-[collapsible=icon]:px-2", className)}
       {...props}
     />
   )
@@ -468,7 +468,7 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
     <ul
       data-slot="sidebar-menu"
       data-sidebar="menu"
-      className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
+      className={cn("flex w-full min-w-0 flex-col gap-1", className)}
       {...props}
     />
   )
@@ -486,7 +486,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-3 overflow-hidden rounded-xl px-3 py-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,background-color,color] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0! hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-primary/10 data-active:text-primary data-active:ring-1 data-active:ring-primary/20 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span]:hidden",
+  "peer/menu-button group/menu-button relative flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-xl px-3 py-2 text-left text-sm font-medium text-sidebar-foreground/80 ring-sidebar-ring outline-hidden transition-[width,height,padding,background-color,color,box-shadow] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-transparent group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0! hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary/10 data-active:text-sidebar-primary data-active:ring-1 data-active:ring-sidebar-primary/20 data-active:before:bg-sidebar-primary [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-sidebar-foreground/70 hover:[&_svg]:text-sidebar-accent-foreground data-active:[&_svg]:text-sidebar-primary [&>span:last-child]:truncate group-data-[collapsible=icon]:[&>span]:hidden",
   {
     variants: {
       variant: {

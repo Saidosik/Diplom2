@@ -65,7 +65,7 @@ export function NavMain({ user = null }: { user?: User | null }) {
                                                     tooltip={item.title}
                                                     className="opacity-60"
                                                 >
-                                                    <Icon />
+                                                    <Icon aria-hidden="true" />
                                                     <span>{item.title}</span>
                                                 </SidebarMenuButton>
                                             ) : (
@@ -76,13 +76,14 @@ export function NavMain({ user = null }: { user?: User | null }) {
                                                 >
                                                     <Link
                                                         href={item.href}
+                                                        aria-current={isActive ? "page" : undefined}
                                                         onClick={() => {
                                                             if (isMobile) {
                                                                 setOpenMobile(false)
                                                             }
                                                         }}
                                                     >
-                                                        <Icon />
+                                                        <Icon aria-hidden="true" />
                                                         <span>{item.title}</span>
                                                     </Link>
                                                 </SidebarMenuButton>
