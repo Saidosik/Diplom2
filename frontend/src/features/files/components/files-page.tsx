@@ -717,6 +717,7 @@ function StorageStrip({ meta, freeBytes }: { meta?: UserFileStorageMeta; freeByt
     )
 }
 
+// Upload uses a centered Dialog only; do not reintroduce Sheet/ScrollArea wrappers here.
 function UploadDialog({
     open,
     onOpenChange,
