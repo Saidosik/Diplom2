@@ -58,6 +58,8 @@ export type AiChatResponse = {
     }
 }
 
+export type CodeExplainIntent = "explain_code" | "explain_result" | "explain_error" | "find_bug" | "optimize" | "write_tests"
+
 export type CodeExplainResponse = {
     answer: string
     sources: RagSource[]

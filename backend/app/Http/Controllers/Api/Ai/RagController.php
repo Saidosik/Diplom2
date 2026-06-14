@@ -307,11 +307,19 @@ class RagController extends Controller
     {
         $data = $request->validate([
             'run_id' => ['nullable', 'integer', 'exists:code_runs,id'],
+            'title' => ['nullable', 'string', 'max:160'],
             'language' => ['nullable', 'string', 'max:40'],
             'code' => ['nullable', 'string', 'max:30000'],
             'stdin' => ['nullable', 'string', 'max:8000'],
             'stdout' => ['nullable', 'string', 'max:20000'],
             'stderr' => ['nullable', 'string', 'max:20000'],
+            'run_status' => ['nullable', 'string', 'max:40'],
+            'exit_code' => ['nullable', 'integer'],
+            'execution_time' => ['nullable', 'numeric'],
+            'memory_usage' => ['nullable', 'numeric'],
+            'intent' => ['nullable', Rule::in(['explain_code', 'explain_result', 'explain_error', 'find_bug', 'optimize', 'write_tests'])],
+            'backend_runner' => ['nullable', 'string', 'max:120'],
+            'backend_execution_note' => ['nullable', 'string', 'max:500'],
             'query' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -320,20 +328,37 @@ class RagController extends Controller
             $run = CodeRun::query()->where('user_id', $request->user()->id)->findOrFail($data['run_id']);
         }
 
-        $language = $data['language'] ?? $run?->language ?? 'code';
-        $code = $data['code'] ?? $run?->code ?? '';
-        $stdin = $data['stdin'] ?? $run?->stdin ?? '';
-        $stdout = $data['stdout'] ?? $run?->stdout ?? '';
-        $stderr = $data['stderr'] ?? $run?->stderr ?? '';
-        $query = trim(($data['query'] ?? '') . ' ' . $language . ' ' . mb_substr($stderr ?: $stdout ?: $code, 0, 700));
+        $runContext = [
+            'title' => $data['title'] ?? $run?->snippet?->title ?? null,
+            'language' => $data['language'] ?? $run?->language ?? 'code',
+            'code' => $data['code'] ?? $run?->code ?? '',
+            'stdin' => $data['stdin'] ?? $run?->stdin ?? '',
+            'stdout' => $data['stdout'] ?? $run?->stdout ?? '',
+            'stderr' => $data['stderr'] ?? $run?->stderr ?? '',
+            'run_id' => $run?->id ?? ($data['run_id'] ?? null),
+            'run_status' => $data['run_status'] ?? $run?->status ?? null,
+            'exit_code' => $data['exit_code'] ?? $run?->exit_code ?? null,
+            'execution_time' => $data['execution_time'] ?? $run?->execution_time ?? null,
+            'memory_usage' => $data['memory_usage'] ?? $run?->memory_usage ?? null,
+            'intent' => $data['intent'] ?? 'explain_code',
+            'backend_runner' => $data['backend_runner'] ?? 'Laravel queue + Docker sandbox',
+            'backend_execution_note' => $data['backend_execution_note'] ?? 'Код выполняется на backend через Laravel queue job и Docker sandbox. Browser не выполняет код напрямую.',
+        ];
 
-        $rag = $search->search($query, [
-            'type' => 'all',
-            'limit' => 6,
-        ]);
+        $hasRun = ! empty($runContext['run_id']) || ! empty($runContext['run_status']);
+        $intent = (string) ($runContext['intent'] ?? 'explain_code');
+        $rag = ['data' => [], 'meta' => []];
+
+        if ($hasRun || in_array($intent, ['explain_code', 'optimize', 'write_tests'], true)) {
+            $query = trim(($data['query'] ?? '') . ' ' . $runContext['language'] . ' ' . $intent . ' ' . mb_substr($runContext['stderr'] ?: $runContext['stdout'] ?: $runContext['code'], 0, 500));
+            $rag = $search->search($query, [
+                'type' => 'all',
+                'limit' => 4,
+            ]);
+        }
 
         return response()->json([
-            'answer' => $answers->codeExplanation($language, $code, $stdin, $stdout, $stderr, $rag['data'] ?? []),
+            'answer' => $answers->codeExplanation($runContext, $rag['data'] ?? []),
             'sources' => $rag['data'] ?? [],
             'meta' => $rag['meta'] ?? [],
         ]);

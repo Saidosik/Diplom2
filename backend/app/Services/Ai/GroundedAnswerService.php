@@ -35,49 +35,74 @@ class GroundedAnswerService
     }
 
     /**
+     * @param array<string, mixed> $runContext
      * @param array<int, array<string, mixed>> $sources
      */
-    public function codeExplanation(string $language, string $code, ?string $stdin, ?string $stdout, ?string $stderr, array $sources): string
+    public function codeExplanation(array $runContext, array $sources): string
     {
-        $external = $this->sdkCodeExplanation($language, $code, $stdin, $stdout, $stderr, $sources);
+        $external = $this->sdkCodeExplanation($runContext, $sources);
 
         if ($external !== null) {
             return $external;
         }
 
-        $lines = [];
-        $lines[] = "Разбор запуска кода (`{$language}`):";
+        $language = (string) ($runContext['language'] ?? 'code');
+        $stderr = (string) ($runContext['stderr'] ?? '');
+        $stdout = (string) ($runContext['stdout'] ?? '');
+        $status = (string) ($runContext['run_status'] ?? 'no_run');
+        $exitCode = $runContext['exit_code'] ?? null;
+        $intent = (string) ($runContext['intent'] ?? 'explain_code');
 
-        if ($stderr) {
-            $lines[] = '';
-            $lines[] = 'Обнаружен вывод в `STDERR`, поэтому сначала проверь ошибку выполнения или компиляции.';
-            $lines[] = 'Ключевой фрагмент ошибки: `' . Str::limit(trim($stderr), 220) . '`';
-        } elseif ($stdout) {
-            $lines[] = '';
-            $lines[] = 'Код выполнился и вернул вывод. Сравни `STDOUT` с ожидаемым результатом и проверь формат вывода.';
+        $lines = [];
+        $lines[] = "Кратко:";
+
+        if (in_array($status, ['queued', 'running'], true)) {
+            $lines[] = 'Результата запуска пока нет: задача ещё в очереди или выполняется в Docker sandbox.';
+        } elseif ($stderr !== '' || ($exitCode !== null && (int) $exitCode !== 0)) {
+            $lines[] = 'Запуск завершился с ошибкой. Сначала нужно разобрать STDERR и код завершения.';
+        } elseif ($stdout !== '') {
+            $lines[] = "Код на языке `{$language}` завершился и вернул вывод в STDOUT.";
         } else {
-            $lines[] = '';
-            $lines[] = 'Запуск не вернул вывод. Проверь, читает ли программа `STDIN`, вызывает ли вывод в консоль и не завершается ли раньше времени.';
+            $lines[] = 'Вывода запуска нет. Проверь, должен ли код печатать результат и корректно ли передан STDIN.';
         }
 
-        $lower = Str::lower(($stderr ?? '') . "\n" . $code);
-        $rules = [
-            'undefined' => 'Если ошибка связана с `undefined`, проверь имя переменной, область видимости и порядок объявления.',
-            'syntax' => 'Если ошибка синтаксиса, проверь скобки, кавычки, точки с запятой и соответствие выбранному языку.',
-            'permission' => 'Если ошибка доступа, в песочнице запрещены сеть и часть файловых операций.',
-            'timeout' => 'Если запуск зависает, проверь бесконечные циклы и чтение ввода.',
-            'memory' => 'Если не хватает памяти, уменьши размер данных или проверь рекурсию/структуры данных.',
-        ];
+        $lines[] = '';
+        $lines[] = 'Что вижу:';
+        $lines[] = 'Код запускается на backend через Laravel queue job и Docker sandbox, а не в браузере.';
+        $lines[] = 'Статус: `' . ($status ?: 'unknown') . '`, exit code: `' . ($exitCode ?? '—') . '`, intent: `' . $intent . '`.';
 
-        foreach ($rules as $needle => $hint) {
+        $lines[] = '';
+        $lines[] = 'Проблема:';
+        $lines[] = $stderr !== '' ? 'STDERR: `' . Str::limit(trim($stderr), 260) . '`' : 'Явный STDERR не передан.';
+
+        $lower = Str::lower($stderr . "\n" . (string) ($runContext['code'] ?? ''));
+        $hints = [];
+        foreach ([
+            'undefined' => 'Проверь имя переменной, область видимости и порядок объявления.',
+            'syntax' => 'Проверь синтаксис: скобки, кавычки, разделители и соответствие выбранному языку.',
+            'timeout' => 'Проверь бесконечные циклы или блокирующее чтение ввода.',
+            'memory' => 'Проверь рекурсию, размер структур данных и ограничения памяти sandbox.',
+        ] as $needle => $hint) {
             if (str_contains($lower, $needle)) {
-                $lines[] = '- ' . $hint;
+                $hints[] = $hint;
             }
         }
 
+        $lines[] = '';
+        $lines[] = 'Что сделать:';
+        $lines[] = $hints === [] ? 'Сопоставь код, STDIN и фактический вывод; если результата ещё нет, дождись завершения запуска.' : implode("\n", array_map(fn (string $hint) => '- ' . $hint, $hints));
+
+        if ($intent === 'optimize') {
+            $lines[] = '- Улучшай читаемость и сложность алгоритма без изменения поведения.';
+        }
+
+        $lines[] = '';
+        $lines[] = 'Проверка:';
+        $lines[] = $intent === 'write_tests' ? 'Подготовь наборы: пустой ввод, минимальный ввод, типичный ввод и граничные значения.' : 'Добавь минимальный пример STDIN и ожидаемый STDOUT для проверки.';
+
         if ($sources !== []) {
             $lines[] = '';
-            $lines[] = 'Похожие материалы платформы:';
+            $lines[] = 'Материалы платформы:';
             foreach (array_slice($sources, 0, 4) as $index => $source) {
                 $lines[] = ($index + 1) . '. ' . ($source['title'] ?? 'Материал') . ' — ' . ($source['href'] ?? '#');
             }
@@ -85,6 +110,7 @@ class GroundedAnswerService
 
         return implode("\n", $lines);
     }
+
 
     /**
      * @param array<int, array<string, mixed>> $sources
@@ -204,24 +230,52 @@ class GroundedAnswerService
     }
 
     /**
+     * @param array<string, mixed> $runContext
      * @param array<int, array<string, mixed>> $sources
      */
-    private function sdkCodeExplanation(string $language, string $code, ?string $stdin, ?string $stdout, ?string $stderr, array $sources): ?string
+    private function sdkCodeExplanation(array $runContext, array $sources): ?string
     {
         $context = collect($sources)
             ->take(6)
-            ->map(fn (array $source, int $index) => '[' . ($index + 1) . '] ' . ($source['title'] ?? 'Источник') . "\n" . Str::limit((string) ($source['content'] ?? ''), 1200, ''))
+            ->map(fn (array $source, int $index) => '[' . ($index + 1) . '] ' . ($source['title'] ?? 'Источник') . "\nURL: " . ($source['href'] ?? '#') . "\n" . Str::limit((string) ($source['content'] ?? ''), 1200, ''))
             ->implode("\n\n");
 
         $instructions = implode("\n", [
-            'Ты AI-помощник для разбора кода в песочнице платформы программистов.',
+            'Ты AI-помощник песочницы кода платформы "Вектор".',
             'Отвечай на русском языке.',
-            'Объясняй ошибку или результат запуска кратко и по делу.',
-            'Опирайся на stdout/stderr, код и найденные материалы платформы.',
+            'Анализируй код только в рамках переданного контекста: название, язык, stdin, stdout, stderr, статус запуска, exit code, время, память и способ запуска.',
+            'Код выполняется на backend через Laravel queue job и Docker sandbox, а не в браузере.',
+            'Не утверждай, что код успешно выполнился, если run_status отсутствует, queued или running.',
+            'Если запуска ещё нет, разбирай только код и явно скажи, что фактического результата выполнения нет.',
+            'Если задача ещё в очереди или выполняется, скажи, что результата запуска пока нет, и предложи дождаться завершения.',
+            'Если есть stderr или exit_code != 0, сначала объясни ошибку.',
+            'Если stderr нет и exit_code = 0, объясни результат и проверь, соответствует ли вывод ожидаемому.',
+            'Если пользователь выбрал optimize, предложи улучшения без изменения поведения.',
+            'Если пользователь выбрал write_tests, предложи тестовые входные данные и ожидаемые результаты.',
+            'Не выдумывай stdout/stderr, которого нет.',
+            'Не предлагай опасные действия: сетевые запросы, доступ к файловой системе вне sandbox, запуск системных команд, секреты или токены.',
+            'Если контекста недостаточно, честно скажи, чего не хватает.',
+            'Формат ответа: Кратко: Что вижу: Проблема: Что сделать: Проверка:',
         ]);
 
-        $prompt = "Язык: {$language}\n\nКод:\n```{$language}\n" . Str::limit($code, 12000, '') . "\n```\n\nSTDIN:\n" . ($stdin ?: '—') . "\n\nSTDOUT:\n" . ($stdout ?: '—') . "\n\nSTDERR:\n" . ($stderr ?: '—') . "\n\nПохожие материалы:\n" . ($context ?: 'Материалы не найдены.');
+        $language = (string) ($runContext['language'] ?? 'code');
+        $prompt = "Контекст запуска:\n"
+            . 'title: ' . ($runContext['title'] ?? '—') . "\n"
+            . 'language: ' . $language . "\n"
+            . 'intent: ' . ($runContext['intent'] ?? 'explain_code') . "\n"
+            . 'run_status: ' . ($runContext['run_status'] ?? '—') . "\n"
+            . 'exit_code: ' . ($runContext['exit_code'] ?? '—') . "\n"
+            . 'execution_time: ' . ($runContext['execution_time'] ?? '—') . "\n"
+            . 'memory_usage: ' . ($runContext['memory_usage'] ?? '—') . "\n"
+            . 'backend_runner: ' . ($runContext['backend_runner'] ?? '—') . "\n"
+            . 'backend_execution_note: ' . ($runContext['backend_execution_note'] ?? '—') . "\n\n"
+            . "Код:\n```{$language}\n" . Str::limit((string) ($runContext['code'] ?? ''), 12000, '') . "\n```\n\n"
+            . "STDIN:\n" . (($runContext['stdin'] ?? '') ?: '—') . "\n\n"
+            . "STDOUT:\n" . (($runContext['stdout'] ?? '') ?: '—') . "\n\n"
+            . "STDERR:\n" . (($runContext['stderr'] ?? '') ?: '—') . "\n\n"
+            . "RAG sources:\n" . ($context ?: 'Материалы не найдены.');
 
         return $this->sdk->text($instructions, $prompt);
     }
+
 }
