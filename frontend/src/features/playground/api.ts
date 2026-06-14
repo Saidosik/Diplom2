@@ -1,5 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
-import type { CodeRun, CodeSnippet, PlaygroundLanguage, RunCodePayload } from "@/features/playground/types"
+import type { CodeRun, CodeSnippet, PlaygroundLanguage, RunCodePayload, UserFile, UserFilePreview } from "@/features/playground/types"
 
 type Collection<T> = {
     data: T[]
@@ -33,5 +33,21 @@ export async function getSnippet(id: number) {
 
 export async function getRun(id: number) {
     const response = await browserApi.get<Resource<CodeRun>>(`/laravel/playground/runs/${id}`)
+    return response.data.data
+}
+
+
+export async function getMyRuns(params?: { per_page?: number; status?: string; language?: string }) {
+    const response = await browserApi.get<Collection<CodeRun>>("/laravel/playground/runs", { params: { per_page: 30, ...params } })
+    return response.data.data
+}
+
+export async function getMyFiles(params?: { kind?: string; per_page?: number; q?: string }) {
+    const response = await browserApi.get<Collection<UserFile>>("/laravel/me/files", { params: { per_page: 50, ...params } })
+    return response.data.data
+}
+
+export async function previewUserFile(id: number) {
+    const response = await browserApi.get<Resource<UserFilePreview>>(`/laravel/me/files/${id}/preview`)
     return response.data.data
 }
