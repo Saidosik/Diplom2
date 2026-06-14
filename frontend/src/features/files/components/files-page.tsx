@@ -635,6 +635,77 @@ function UploadDialog({
                         <LimitChip label="Лимит файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} />
                         <LimitChip label="Публичные" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} />
                     </div>
+                </ScrollArea>
+                <SheetFooter className="border-t">
+                    <Button disabled={!canUpload} onClick={onSubmit}>
+                        {isPending ? <Loader2 className="size-4 animate-spin" /> : null} Загрузить
+                    </Button>
+                    <Button variant="outline" onClick={onCancel}>Отмена</Button>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
+    )
+}
+
+function LimitChip({ label, value }: { label: string; value: string }) {
+    return <div className="rounded-xl bg-muted/50 p-3"><div className="text-xs text-muted-foreground">{label}</div><div className="font-medium">{value}</div></div>
+}
+
+function FileItem(props: {
+    file: UserFile
+    view: "grid" | "list"
+    onCopy: () => void
+    onDownload: () => void
+    onEdit: () => void
+    onToggleVisibility: () => void
+    onDelete: () => void
+}) {
+    const content = props.view === "grid" ? <FileGridCard {...props} /> : <FileRow {...props} />
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>{content}</ContextMenuTrigger>
+            <ContextMenuContent>
+                <FileMenuItems variant="context" {...props} />
+            </ContextMenuContent>
+        </ContextMenu>
+    )
+}
+
+function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+    return (
+        <div className="group flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80 sm:flex-row sm:items-center sm:justify-between">
+            <FileIdentity file={file} />
+            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                <VisibilityBadge file={file} />
+                <Button size="sm" variant="outline" asChild>
+                    <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
+                </Button>
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+            </div>
+        </div>
+    )
+}
+
+function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+    const Icon = fileIcon(file.kind)
+    return (
+        <div className="group relative min-w-0 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80">
+            <div className="absolute right-3 top-3 z-10">
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onDelete={onDelete} />
+            </div>
+            <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-muted/50 text-primary">
+                {file.kind === "image" && file.preview_url ? (
+                    <Image src={file.preview_url} alt="" width={320} height={180} unoptimized className="size-full object-cover" />
+                ) : <Icon className="size-9" />}
+            </div>
+            <div className="min-w-0 space-y-2">
+                <div className="line-clamp-2 min-h-10 font-medium">{file.title || file.original_name}</div>
+                <div className="text-xs text-muted-foreground">{sizeLabel(file.size)} · {dateLabel(file.created_at)}</div>
+                <div className="flex items-center justify-between gap-2">
+                    <VisibilityBadge file={file} />
+                    <Button size="sm" variant="outline" asChild>
+                        <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
+                    </Button>
                 </div>
 
                 <DialogFooter className="gap-2 sm:gap-2">
