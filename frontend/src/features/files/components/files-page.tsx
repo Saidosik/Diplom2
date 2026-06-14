@@ -130,7 +130,6 @@ export function FilesPage() {
     const files = filesQuery.data?.data ?? []
     const hasFilters = Boolean(q || kind !== "all" || visibility !== "all")
     const quotaFull = Boolean(meta && (meta.used_bytes >= meta.quota_bytes || meta.files_count >= meta.max_files))
-    const publicQuotaFull = Boolean(meta && meta.public_files_count >= meta.max_public_files)
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -401,7 +400,6 @@ export function FilesPage() {
                     freeBytes={freeBytes}
                     dragActive={dragActive}
                     isPending={uploadMutation.isPending}
-                    publicQuotaFull={publicQuotaFull}
                     onCancel={() => { setUploadOpen(false); resetUploadForm() }}
                     onChoose={chooseFile}
                     onTitleChange={setUploadTitle}
@@ -459,20 +457,7 @@ function StorageStrip({ meta, freeBytes }: { meta?: UserFileStorageMeta; freeByt
             </div>
             <Progress value={meta?.used_percent ?? 0} className="mt-3 h-2" />
         </div>
-
-        <Card><CardHeader><CardTitle>Квота хранилища</CardTitle><CardDescription>{meta ? `Использовано: ${sizeLabel(meta.used_bytes)} из ${sizeLabel(meta.quota_bytes)}` : "Загружаем лимиты хранилища"}</CardDescription></CardHeader><CardContent className="space-y-4"><Progress value={meta?.used_percent ?? 0} /><div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><Quota label="Файлов" value={meta ? `${meta.files_count} / ${meta.max_files}` : "—"} /><Quota label="Публичных" value={meta ? `${meta.public_files_count} / ${meta.max_public_files}` : "—"} /><Quota label="Максимум файла" value={meta ? sizeLabel(meta.max_file_bytes) : "—"} /><Quota label="Заполнено" value={`${meta?.used_percent ?? 0}%`} /></div></CardContent></Card>
-
-        {quotaFull ? <Alert><ShieldAlert className="size-4" /><AlertTitle>Хранилище заполнено</AlertTitle><AlertDescription>Удалите ненужные файлы или сделайте их приватными, если достигнут лимит публичных файлов.</AlertDescription></Alert> : null}
-
-        <div className="grid gap-4 xl:grid-cols-[0.85fr_1.4fr]">
-            <Card><CardHeader><CardTitle>Загрузка</CardTitle><CardDescription>По умолчанию файл приватный и доступен только владельцу.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="space-y-2"><Label>Название</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Автоматически из имени файла" /></div><div className="space-y-2"><Label>Доступ</Label><Select value={uploadVisibility} onValueChange={(v) => setUploadVisibility(v as "private" | "public")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="private">Приватный</SelectItem><SelectItem value="public">Публичный</SelectItem></SelectContent></Select></div><div onDragEnter={() => setDragActive(true)} onDragLeave={() => setDragActive(false)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); setDragActive(false); choose(e.dataTransfer.files.item(0)) }} className={`flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition ${dragActive ? "border-primary bg-primary/10" : "bg-muted/30"}`}><UploadCloud className="mb-3 size-8 text-primary" /><div className="font-medium">Перетащите файл сюда</div><p className="mt-1 text-sm text-muted-foreground">{helper}</p><Button className="mt-4" disabled={uploadMutation.isPending} onClick={() => inputRef.current?.click()}>{uploadMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}Выбрать файл</Button><input ref={inputRef} type="file" className="hidden" disabled={uploadMutation.isPending} onChange={(e) => { choose(e.target.files?.item(0)); e.currentTarget.value = "" }} /></div></CardContent></Card>
-
-            <Card><CardHeader><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><CardTitle>Библиотека</CardTitle><CardDescription>Поиск, фильтры, сортировка и действия с файлами.</CardDescription></div><ToggleGroup type="single" value={view} onValueChange={(v) => v && setView(v as "grid" | "list")}><ToggleGroupItem value="grid" aria-label="Сетка"><Grid2X2 className="size-4" /></ToggleGroupItem><ToggleGroupItem value="list" aria-label="Список"><List className="size-4" /></ToggleGroupItem></ToggleGroup></div></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_150px_160px_140px]"><div className="relative md:col-span-2 xl:col-span-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по файлам" className="pl-9" /></div><Select value={kind} onValueChange={setKind}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все типы</SelectItem>{Object.entries(kindLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select><Select value={visibility} onValueChange={setVisibility}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Любой доступ</SelectItem><SelectItem value="private">Приватные</SelectItem><SelectItem value="public">Публичные</SelectItem></SelectContent></Select><Select value={sort} onValueChange={setSort}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Новые</SelectItem><SelectItem value="oldest">Старые</SelectItem><SelectItem value="name">Имя</SelectItem><SelectItem value="size">Размер</SelectItem></SelectContent></Select></div>{filesQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}</div> : files.length ? <div className={view === "grid" ? "grid gap-3 sm:grid-cols-2 2xl:grid-cols-3" : "space-y-3"}>{files.map((file) => <FileCard key={file.id} file={file} compact={view === "list"} onCopy={() => copyLink(file)} onDownload={() => download(file)} onPublish={() => setPublishFile(file)} onTogglePrivate={() => updateMutation.mutate({ id: file.id, nextVisibility: "private" })} onDelete={() => deleteMutation.mutate(file.id)} />)}</div> : <EmptyState hasFilters={hasFilters} quotaFull={quotaFull} onReset={resetFilters} onUpload={() => inputRef.current?.click()} onBiggest={() => { resetFilters(); setSort("size") }} />}</CardContent></Card>
-        </div>
-
-        <AlertDialog open={Boolean(publishFile)} onOpenChange={(open) => !open && setPublishFile(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Сделать файл публичным?</AlertDialogTitle><AlertDialogDescription>Файл станет доступен другим пользователям. Не публикуйте персональные данные, пароли, токены, ключи API и приватные документы.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction onClick={() => { if (publishFile) updateMutation.mutate({ id: publishFile.id, nextVisibility: "public" }); setPublishFile(null) }}>Сделать публичным</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-        <AlertDialog open={Boolean(downloadWarning)} onOpenChange={(open) => !open && setDownloadWarning(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Вы скачиваете файл другого пользователя</AlertDialogTitle><AlertDialogDescription>Платформа «Вектор» не проверяет содержимое каждого файла и не несёт ответственности за файлы, загруженные пользователями. Не открывайте подозрительные архивы, документы и файлы из неизвестных источников.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Отмена</AlertDialogCancel><AlertDialogAction onClick={() => { if (downloadWarning?.download_url) window.location.href = downloadWarning.download_url }}>Скачать файл</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-    </div>
+    )
 }
 
 function UploadSheet({
@@ -503,7 +488,6 @@ function UploadSheet({
     freeBytes: number
     dragActive: boolean
     isPending: boolean
-    publicQuotaFull: boolean
     onCancel: () => void
     onChoose: (file?: File | null) => void
     onTitleChange: (value: string) => void
