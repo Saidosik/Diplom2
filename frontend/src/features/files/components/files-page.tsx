@@ -17,7 +17,6 @@ import {
     List,
     Loader2,
     MoreHorizontal,
-    Pencil,
     Pin,
     PinOff,
     Search,
@@ -415,9 +414,31 @@ export function FilesPage() {
         }
     }, [chooseUploadFiles, uploadOpen])
 
+    const currentFolder = folders.find((folder) => folder.id === selectedFolderId)
+    const libraryTitle =
+        selectedSmartFilter === "pinned"
+            ? "Закреплённые"
+            : selectedSmartFilter === "public"
+                ? "Публичные файлы"
+                : selectedSmartFilter === "unfiled"
+                    ? "Без папки"
+                    : selectedSmartFilter === "folder"
+                        ? currentFolder?.name ?? "Папка"
+                        : "Все файлы"
+    const libraryDescription =
+        selectedSmartFilter === "pinned"
+            ? "Важные файлы, закреплённые для быстрого доступа."
+            : selectedSmartFilter === "public"
+                ? "Файлы, доступные другим пользователям по ссылке."
+                : selectedSmartFilter === "unfiled"
+                    ? "Файлы, которые не добавлены ни в одну папку."
+                    : selectedSmartFilter === "folder"
+                        ? "Файлы внутри выбранной папки."
+                        : "Файлы для чатов, публикаций и демонстрации проекта."
+
     return (
         <TooltipProvider>
-            <div className="mx-auto max-w-7xl space-y-5 overflow-x-hidden">
+            <div className="mx-auto w-full max-w-[1440px] space-y-5 overflow-x-hidden px-4 sm:px-6 lg:px-8">
                 <div className="space-y-4">
                     <Breadcrumb>
                         <BreadcrumbList>
@@ -460,7 +481,7 @@ export function FilesPage() {
                     </Alert>
                 ) : null}
 
-                <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                     <FolderPanel
                         folders={folders}
                         selectedSmartFilter={selectedSmartFilter}
@@ -471,12 +492,12 @@ export function FilesPage() {
                         onDelete={(folder) => setPendingAction({ type: "delete-folder", folder })}
                     />
 
-                    <Card className="overflow-hidden">
+                    <Card className="min-w-0 overflow-hidden">
                         <CardHeader className="gap-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
-                                <CardTitle>Библиотека</CardTitle>
-                                <CardDescription>Файлы для чатов, публикаций и демонстрации проекта.</CardDescription>
+                                <CardTitle>{libraryTitle}</CardTitle>
+                                <CardDescription>{libraryDescription}</CardDescription>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" size="sm" onClick={() => setCommandOpen(true)}>
@@ -544,7 +565,7 @@ export function FilesPage() {
                                         view={view}
                                         onCopy={() => copyLink(file)}
                                         onDownload={() => requestDownload(file)}
-                                        onEdit={() => openEdit(file)}
+                                        onDetails={() => openEdit(file)}
                                         onToggleVisibility={() => requestVisibility(file)}
                                         onTogglePinned={() => pinMutation.mutate({ id: file.id, pinned: !file.is_pinned })}
                                         onMove={() => { setMovingFile(file); setMoveFolderId(file.folder_id ?? null) }}
@@ -653,7 +674,7 @@ function FolderPanel({ folders, selectedSmartFilter, selectedFolderId, onSelect,
     return (
         <Card className="h-fit lg:sticky lg:top-4">
             <CardHeader className="pb-3">
-                <CardTitle className="text-base">Библиотека</CardTitle>
+                <CardTitle className="text-base">Разделы</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
@@ -676,7 +697,7 @@ function FolderPanel({ folders, selectedSmartFilter, selectedFolderId, onSelect,
                                         <span className="text-xs text-muted-foreground">{folder.files_count ?? 0}</span>
                                     </button>
                                     <DropdownMenu>
-                                        <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label="Действия с папкой"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+                                        <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100 data-[state=open]:opacity-100" aria-label="Действия с папкой"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuItem onSelect={() => onEdit(folder)}>Редактировать</DropdownMenuItem>
                                             <DropdownMenuSeparator />
@@ -896,7 +917,7 @@ function FileItem(props: {
     view: "grid" | "list"
     onCopy: () => void
     onDownload: () => void
-    onEdit: () => void
+    onDetails: () => void
     onToggleVisibility: () => void
     onTogglePinned: () => void
     onMove: () => void
@@ -913,27 +934,24 @@ function FileItem(props: {
     )
 }
 
-function FileRow({ file, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+function FileRow({ file, onCopy, onDownload, onDetails, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
     return (
         <div className="group flex min-w-0 flex-col gap-3 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80 sm:flex-row sm:items-center sm:justify-between">
             <FileIdentity file={file} />
-            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <div className="flex shrink-0 items-center gap-2 sm:justify-end">
                 <VisibilityBadge file={file} />
-                <Button size="sm" variant="outline" asChild>
-                    <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
-                </Button>
-                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onDetails={onDetails} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
             </div>
         </div>
     )
 }
 
-function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
+function FileGridCard({ file, onCopy, onDownload, onDetails, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view">) {
     const Icon = fileIcon(file.kind)
     return (
         <div className="group relative min-w-0 rounded-2xl border bg-card/60 p-3 transition hover:border-primary/30 hover:bg-card/80">
             <div className="absolute right-3 top-3 z-10">
-                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onEdit={onEdit} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
+                <FileDropdown file={file} onCopy={onCopy} onDownload={onDownload} onDetails={onDetails} onToggleVisibility={onToggleVisibility} onTogglePinned={onTogglePinned} onMove={onMove} onDelete={onDelete} />
             </div>
             <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-muted/50 text-primary">
                 {file.kind === "image" && file.preview_url ? (
@@ -941,13 +959,14 @@ function FileGridCard({ file, onCopy, onDownload, onEdit, onToggleVisibility, on
                 ) : <Icon className="size-9" />}
             </div>
             <div className="min-w-0 space-y-2">
-                <div className="line-clamp-2 min-h-10 font-medium">{file.is_pinned ? "📌 " : ""}{file.title || file.original_name}</div>
+                <div className="flex min-h-10 min-w-0 items-start gap-1.5 font-medium">
+                    <span className="line-clamp-2 min-w-0">{file.title || file.original_name}</span>
+                    {file.is_pinned ? <Pin className="mt-0.5 size-3.5 shrink-0 text-primary" /> : null}
+                </div>
                 <div className="text-xs text-muted-foreground">{sizeLabel(file.size)} · {dateLabel(file.created_at)}</div>
                 <div className="flex items-center justify-between gap-2">
                     <VisibilityBadge file={file} />
-                    <Button size="sm" variant="outline" asChild>
-                        <Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link>
-                    </Button>
+                    {file.is_pinned ? <Pin className="size-3.5 text-primary" /> : null}
                 </div>
             </div>
         </div>
@@ -1005,7 +1024,7 @@ function FileDropdown(props: Omit<Parameters<typeof FileItem>[0], "view">) {
     )
 }
 
-function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view"> & { variant: "dropdown" | "context" }) {
+function FileMenuItems({ file, variant, onCopy, onDownload, onDetails, onToggleVisibility, onTogglePinned, onMove, onDelete }: Omit<Parameters<typeof FileItem>[0], "view"> & { variant: "dropdown" | "context" }) {
     const Item = variant === "dropdown" ? DropdownMenuItem : ContextMenuItem
     const Separator = variant === "dropdown" ? DropdownMenuSeparator : ContextMenuSeparator
     return (
@@ -1013,11 +1032,10 @@ function FileMenuItems({ file, variant, onCopy, onDownload, onEdit, onToggleVisi
             <Item asChild><Link href={`/files/${file.id}`}><Eye className="size-4" /> Открыть</Link></Item>
             <Item onSelect={onDownload}><Download className="size-4" /> Скачать</Item>
             {file.visibility === "public" ? <Item onSelect={onCopy}><Copy className="size-4" /> Скопировать ссылку</Item> : null}
-            <Item onSelect={onEdit}><Pencil className="size-4" /> Переименовать / Настройки</Item>
+            <Item onSelect={onDetails}><Info className="size-4" /> Подробнее</Item>
             <Item onSelect={onTogglePinned}>{file.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />} {file.is_pinned ? "Открепить" : "Закрепить"}</Item>
             <Item onSelect={onMove}><FolderOpen className="size-4" /> Переместить в папку</Item>
             <Item onSelect={onToggleVisibility}><FileCog className="size-4" /> {file.visibility === "public" ? "Сделать приватным" : "Опубликовать"}</Item>
-            <Item asChild><Link href={`/files/${file.id}`}><Info className="size-4" /> Показать сведения</Link></Item>
             <Separator />
             <Item variant="destructive" onSelect={onDelete}><Trash2 className="size-4" /> Удалить</Item>
         </>
@@ -1061,8 +1079,8 @@ function EditFileDialog(props: {
         <Dialog open={Boolean(props.file)} onOpenChange={props.onOpenChange}>
             <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>Настройки файла</DialogTitle>
-                    <DialogDescription>Измените название, доступ и проверьте сведения о файле.</DialogDescription>
+                    <DialogTitle>Подробнее о файле</DialogTitle>
+                    <DialogDescription>Проверьте сведения о файле, измените название или доступ.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-2">
@@ -1084,7 +1102,7 @@ function EditFileDialog(props: {
                         <Meta label="Оригинальное имя" value={props.file.original_name} />
                         <Meta label="Размер" value={sizeLabel(props.file.size)} />
                         <Meta label="MIME" value={props.file.mime_type || props.file.kind} />
-                        <Meta label="Дата" value={dateLabel(props.file.created_at)} />
+                        <Meta label="Дата загрузки" value={dateLabel(props.file.created_at)} />
                     </div>
                 </div>
                 <DialogFooter>
