@@ -14,6 +14,7 @@ use App\Models\Subscription;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\Community\CommunityActivityService;
+use App\Services\PublicationRankingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,13 +66,16 @@ class CommunityDiscoveryController extends Controller
         $period = $this->period($request);
         $limit = max(1, min(24, (int) $request->query('limit', 6)));
         $page = max(1, (int) $request->query('page', 1));
-        $cacheKey = sprintf('community:popular-publications:%s:%d:%d', $period, $limit, $page);
+        $sort = in_array((string) $request->query('sort', 'popular'), ['popular', 'new', 'discussed', 'rating', 'views'], true) ? (string) $request->query('sort', 'popular') : 'popular';
+        $type = (string) $request->query('type', '');
+        $type = in_array($type, \App\Enums\PublicationType::values(), true) ? $type : null;
+        $cacheKey = sprintf('community:popular-publications:%s:%s:%s:%d:%d', $period, $sort, $type ?: 'all', $limit, $page);
 
-        $payload = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($period, $limit, $page, $request) {
+        $payload = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($period, $limit, $page, $request, $sort, $type) {
             $since = $this->periodStart($period);
             $offset = ($page - 1) * $limit;
             $take = $offset + $limit + 1;
-            $publications = $this->popularPublicationsCollection($since, $take);
+            $publications = $this->popularPublicationsCollection($since, $take, $sort, $type);
             $pageItems = $publications->slice($offset, $limit)->values();
             $hasMore = $publications->count() > ($offset + $limit);
 
@@ -84,6 +88,8 @@ class CommunityDiscoveryController extends Controller
                     'next_page' => $hasMore ? $page + 1 : null,
                     'has_more' => $hasMore,
                     'total' => $publications->count(),
+                    'sort' => $sort,
+                    'type' => $type,
                 ],
             ];
         });
@@ -143,6 +149,21 @@ class CommunityDiscoveryController extends Controller
                 'followed_authors_count' => count($profile['author_ids']),
                 'signals_count' => $profile['signals_count'],
             ],
+        ]);
+    }
+
+    public function sidebar(Request $request): JsonResponse
+    {
+        $period = $this->period($request);
+        $since = $this->periodStart($period);
+        $popular = $this->popularPublicationsCollection($since, 12);
+
+        return response()->json([
+            'period' => $period,
+            'trending_tags' => $this->popularTags($since, 10),
+            'discussed_publications' => PublicationResource::collection($popular->sortByDesc(fn (Publication $p) => (int) ($p->period_comments_count ?? $p->comments_count ?? 0))->take(5))->resolve($request),
+            'top_authors' => $this->topUsers(5),
+            'latest_publications' => PublicationResource::collection(Publication::query()->published()->with(['author', 'tags'])->withCount(['comments', 'savedItems', 'reactions as likes_count' => fn (Builder $builder) => $builder->where('type', Reaction::LIKE), 'reactions as dislikes_count' => fn (Builder $builder) => $builder->where('type', Reaction::DISLIKE)])->latest('published_at')->limit(5)->get())->resolve($request),
         ]);
     }
 
@@ -235,13 +256,15 @@ class CommunityDiscoveryController extends Controller
     /**
      * @return Collection<int, Publication>
      */
-    private function popularPublicationsCollection(Carbon $since, int $limit): Collection
+    private function popularPublicationsCollection(Carbon $since, int $limit, string $sort = 'popular', ?string $type = null): Collection
     {
         return Publication::query()
             ->published()
+            ->when($type, fn (Builder $builder) => $builder->where('type', $type))
             ->with(['author', 'tags'])
             ->withCount([
                 'comments',
+                'views as period_views_count' => fn (Builder $builder) => $builder->where('viewed_at', '>=', $since),
                 'savedItems',
                 'reactions as likes_count' => fn (Builder $builder) => $builder->where('type', Reaction::LIKE),
                 'reactions as dislikes_count' => fn (Builder $builder) => $builder->where('type', Reaction::DISLIKE),
@@ -254,9 +277,21 @@ class CommunityDiscoveryController extends Controller
             ->latest('published_at')
             ->limit(80)
             ->get()
-            ->sortByDesc(fn (Publication $publication) => $this->publicationScore($publication))
+            ->sortByDesc(fn (Publication $publication) => match ($sort) {
+                'new' => $publication->published_at?->getTimestamp() ?? 0,
+                'discussed' => (int) ($publication->period_comments_count ?? $publication->comments_count ?? 0),
+                'rating' => (int) ($publication->likes_count ?? 0) - (int) ($publication->dislikes_count ?? 0),
+                'views' => (int) ($publication->views_count ?? 0),
+                default => $this->publicationScore($publication),
+            })
             ->values()
-            ->take($limit);
+            ->take($limit)
+            ->values()
+            ->each(function (Publication $publication, int $index) {
+                $publication->setAttribute('score', $this->publicationScore($publication));
+                $publication->setAttribute('rank_position', $index + 1);
+                $publication->setAttribute('reason_label', app(PublicationRankingService::class)->reasonLabel($publication, request()->query('period', 'week')));
+            });
     }
 
     /**
@@ -712,15 +747,7 @@ class CommunityDiscoveryController extends Controller
 
     private function publicationScore(Publication $publication): int
     {
-        $periodLikes = (int) ($publication->period_likes_count ?? 0);
-        $periodComments = (int) ($publication->period_comments_count ?? 0);
-        $periodSaved = (int) ($publication->period_saved_count ?? 0);
-        $likes = (int) ($publication->likes_count ?? 0);
-        $comments = (int) ($publication->comments_count ?? 0);
-        $saved = (int) ($publication->saved_items_count ?? 0);
-        $freshness = $publication->published_at?->greaterThan(now()->subDays(3)) ? 8 : 0;
-
-        return ($periodLikes * 5) + ($periodComments * 6) + ($periodSaved * 7) + ($likes * 2) + ($comments * 2) + ($saved * 2) + $freshness;
+        return (int) round(app(PublicationRankingService::class)->score($publication));
     }
 
     private function questionScore(IssueQuestion $question): int

@@ -57,6 +57,7 @@ Route::get('/users/{user}/reputation-events', [ReputationController::class, 'use
 Route::get('/content-attachments/{contentAttachment}/download', [ContentAttachmentController::class, 'download']);
 Route::get('/publications', [PublicationController::class, 'index']);
 Route::get('/publications/{publication}', [PublicationController::class, 'show']);
+Route::post('/publications/{publication}/view', [PublicationController::class, 'recordView'])->middleware('throttle:60,1');
 
 Route::get('/issues', [IssueQuestionController::class, 'index']);
 Route::get('/issues/{issueQuestion}', [IssueQuestionController::class, 'show']);
@@ -69,6 +70,7 @@ Route::get('/community/popular-publications', [CommunityDiscoveryController::cla
 Route::get('/community/feed', [CommunityDiscoveryController::class, 'feed']);
 Route::get('/community/trends', [CommunityDiscoveryController::class, 'trends']);
 Route::get('/community/recommendations', [CommunityDiscoveryController::class, 'recommendations']);
+Route::get('/feed/sidebar', [CommunityDiscoveryController::class, 'sidebar']);
 Route::get('/community/users', [CommunityDiscoveryController::class, 'users']);
 Route::get('/search', GlobalSearchController::class)->middleware('throttle:search');
 Route::post('/ai/search', [AiAssistantController::class, 'search'])->middleware('throttle:ai');

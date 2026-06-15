@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
         'status',
         'cover_image_path',
         'reading_time_minutes',
+        'views_count',
         'published_at',)]
 
 class Publication extends Model
@@ -34,6 +35,7 @@ class Publication extends Model
             'status' => PublicationStatus::class,
             'published_at' => 'datetime',
             'reading_time_minutes' => 'integer',
+            'views_count' => 'integer',
         ];
     }
 
@@ -71,6 +73,11 @@ class Publication extends Model
     public function savedItems(): MorphMany
     {
         return $this->morphMany(SavedItem::class, 'saveable');
+    }
+
+    public function views(): HasMany
+    {
+        return $this->hasMany(PublicationView::class);
     }
 
     public function attachments(): MorphMany

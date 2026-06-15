@@ -1,4 +1,4 @@
-export type PublicationType = "article" | "news" | "post" | "guide"
+export type PublicationType = "article" | "news" | "post" | "guide" | "tutorial" | "opinion" | "release" | "question_related"
 export type PublicationStatus = "draft" | "published" | "hidden" | "archived"
 
 export type PublicationBlockType =
@@ -69,6 +69,8 @@ export type Publication = {
     id: number
     type: PublicationType
     type_label?: string
+    content_type?: PublicationType
+    content_type_label?: string
     status: PublicationStatus
     status_label?: string
     title: string
@@ -77,12 +79,20 @@ export type Publication = {
     cover_image_path?: string | null
     cover_image_url?: string | null
     reading_time_minutes?: number | null
+    reading_time?: number | null
+    views_count?: number
+    rating?: number
+    score?: number
+    rank_position?: number | null
+    reason_label?: string | null
     likes_count?: number
     dislikes_count?: number
     comments_count?: number
     saved_count?: number
     my_reaction?: "like" | "dislike" | null
     is_saved?: boolean
+    is_saved_by_me?: boolean
+    is_liked_by_me?: boolean
     published_at?: string | null
     created_at?: string | null
     updated_at?: string | null

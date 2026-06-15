@@ -33,7 +33,7 @@ export async function getMyPublications(params?: Record<string, string | number 
 }
 
 
-export async function getPopularPublications(params?: { period?: PopularPublicationPeriod; limit?: number; page?: number }) {
+export async function getPopularPublications(params?: { period?: PopularPublicationPeriod; limit?: number; page?: number; sort?: string; type?: string }) {
     const response = await browserApi.get<PopularPublicationsResponse>("/publications/popular", { params })
     return response.data
 }
