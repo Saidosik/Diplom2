@@ -10,6 +10,7 @@ import type {
     CommunityTopUser,
     CommunityTrend,
     CommunityRecommendation,
+    RecommendationsResponse,
     InterestProfile,
 } from "@/features/community/types"
 
@@ -30,6 +31,11 @@ export async function getCommunityTrends(period: "day" | "week" | "month" = "wee
 
 export async function getCommunityRecommendations(period: "day" | "week" | "month" = "week") {
     const response = await browserApi.get<{ period: string; data: CommunityRecommendation[] }>("/laravel/community/recommendations", { params: { period } })
+    return response.data
+}
+
+export async function getRecommendations(period: "day" | "week" | "month" = "week") {
+    const response = await browserApi.get<RecommendationsResponse>("/laravel/recommendations", { params: { period } })
     return response.data
 }
 
