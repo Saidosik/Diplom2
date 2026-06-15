@@ -27,9 +27,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class ProfileHubController extends Controller
 {
@@ -38,7 +40,7 @@ class ProfileHubController extends Controller
     public function me(Request $request, AchievementService $achievements): JsonResponse
     {
         $user = $request->user();
-        $achievements->recalculate($user);
+        $this->safeProfileBlock('achievement_recalculate', fn () => $achievements->recalculate($user), null);
 
         return response()->json($this->dashboard($request, $user, true, $achievements));
     }
@@ -93,9 +95,9 @@ class ProfileHubController extends Controller
     public function achievements(Request $request, User $user, AchievementService $service): JsonResponse
     {
         abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
-        $service->recalculate($user);
+        $this->safeProfileBlock('achievement_recalculate', fn () => $service->recalculate($user), null);
 
-        return response()->json(['data' => $this->achievementsData($user)]);
+        return response()->json(['data' => $this->safeProfileBlock('achievements', fn () => $this->achievementsData($user), [])]);
     }
 
     public function reputation(Request $request, User $user): JsonResponse
@@ -213,21 +215,63 @@ class ProfileHubController extends Controller
         $canSeeActivity = $owner || ($user->show_activity_publicly ?? true);
 
         return [
-            'user' => $this->userData($user, $owner),
-            'stats' => $this->stats($user),
-            'completion' => $service->completion($user),
-            'pinned_items' => $this->pinnedData($user, $owner, 8),
-            'materials' => $this->materialsData($user, 'all', $owner, 10),
-            'snippets' => $this->snippetsData($user, $owner, 8),
-            'files' => $canSeeFiles ? $this->filesData($user, $owner, 8) : [],
-            'friends' => $this->friendsData($user, $viewer, 8),
-            'activity' => $canSeeActivity ? $this->activityData($user, $owner, 18) : [],
-            'achievements' => $this->achievementsData($user),
-            'reputation' => $this->reputationData($user),
-            'saved_summary' => $owner ? SavedItem::query()->where('user_id', $user->id)->count() : null,
-            'saved_items' => $owner ? $this->savedItemsData($user, 12) : [],
-            'relationship_to_viewer' => $owner ? ['is_owner' => true] : $this->relationship($viewer, $user),
+            'user' => $this->safeProfileBlock('user', fn () => $this->userData($user, $owner), $this->minimalUserData($user, $owner)),
+            'stats' => $this->safeProfileBlock('stats', fn () => $this->stats($user), []),
+            'completion' => $this->safeProfileBlock('completion', fn () => $service->completion($user), 0),
+            'pinned_items' => $this->safeProfileBlock('pinned_items', fn () => $this->pinnedData($user, $owner, 8), []),
+            'materials' => $this->safeProfileBlock('materials', fn () => $this->materialsData($user, 'all', $owner, 10), []),
+            'snippets' => $this->safeProfileBlock('snippets', fn () => $this->snippetsData($user, $owner, 8), []),
+            'files' => $canSeeFiles ? $this->safeProfileBlock('files', fn () => $this->filesData($user, $owner, 8), []) : [],
+            'friends' => $this->safeProfileBlock('friends', fn () => $this->friendsData($user, $viewer, 8), []),
+            'activity' => $canSeeActivity ? $this->safeProfileBlock('activity', fn () => $this->activityData($user, $owner, 18), []) : [],
+            'achievements' => $this->safeProfileBlock('achievements', fn () => $this->achievementsData($user), []),
+            'reputation' => $this->safeProfileBlock('reputation', fn () => $this->reputationData($user), ['score' => (int) ($user->reputation_score ?? 0), 'level' => $user->reputationLevel(), 'events' => []]),
+            'saved_summary' => $owner ? $this->safeProfileBlock('saved_summary', fn () => SavedItem::query()->where('user_id', $user->id)->count(), 0) : null,
+            'saved_items' => $owner ? $this->safeProfileBlock('saved_items', fn () => $this->savedItemsData($user, 12), []) : [],
+            'relationship_to_viewer' => $owner ? ['is_owner' => true] : $this->safeProfileBlock('relationship', fn () => $this->relationship($viewer, $user), ['is_owner' => false, 'is_following' => false, 'is_friend' => false, 'friend_request_status' => null, 'can_message' => false]),
         ];
+    }
+
+    private function safeProfileBlock(string $block, callable $callback, mixed $fallback): mixed
+    {
+        try {
+            return $callback();
+        } catch (Throwable $exception) {
+            Log::warning('Profile dashboard block failed', [
+                'block' => $block,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $fallback;
+        }
+    }
+
+    private function minimalUserData(User $user, bool $owner): array
+    {
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'avatar' => $user->avatar,
+            'avatar_url' => $this->avatarUrl($user),
+            'headline' => $user->headline,
+            'bio' => $user->bio,
+            'location' => $user->location,
+            'direction' => $user->direction,
+            'website_url' => $user->website_url,
+            'github_url' => $user->github_url,
+            'profile_visibility' => $user->profile_visibility ?? 'public',
+            'reputation_score' => (int) ($user->reputation_score ?? 0),
+            'reputation_level' => $user->reputationLevel(),
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
+        ];
+
+        if ($owner || ($user->show_email_publicly ?? false)) {
+            $data['email'] = $user->email;
+        }
+
+        return $data;
     }
 
     private function userData(User $user, bool $owner): array

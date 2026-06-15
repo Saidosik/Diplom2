@@ -264,7 +264,6 @@ class CommunityDiscoveryController extends Controller
             ->with(['author', 'tags'])
             ->withCount([
                 'comments',
-                'views as period_views_count' => fn (Builder $builder) => $builder->where('viewed_at', '>=', $since),
                 'savedItems',
                 'reactions as likes_count' => fn (Builder $builder) => $builder->where('type', Reaction::LIKE),
                 'reactions as dislikes_count' => fn (Builder $builder) => $builder->where('type', Reaction::DISLIKE),
