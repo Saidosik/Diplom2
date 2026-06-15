@@ -41,12 +41,21 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\User\AuthController;
 use App\Http\Controllers\Api\User\PasswordController;
 use App\Http\Controllers\Api\User\ProfileController;
+use App\Http\Controllers\Api\User\ProfileHubController;
 use App\Http\Controllers\Api\User\PublicProfileController;
 use App\Http\Controllers\Api\User\UserFileController;
 use App\Http\Controllers\Api\User\UserFileFolderController;
 use App\Http\Controllers\Api\User\VerifyEmailAcountController;
 
 
+Route::get('/users/{user}/profile/dashboard', [ProfileHubController::class, 'public']);
+Route::get('/users/{user}/materials', [ProfileHubController::class, 'materials']);
+Route::get('/users/{user}/snippets', [ProfileHubController::class, 'snippets']);
+Route::get('/users/{user}/files', [ProfileHubController::class, 'files']);
+Route::get('/users/{user}/friends', [ProfileHubController::class, 'friends']);
+Route::get('/users/{user}/activity', [ProfileHubController::class, 'activity']);
+Route::get('/users/{user}/achievements', [ProfileHubController::class, 'achievements']);
+Route::get('/users/{user}/reputation', [ProfileHubController::class, 'reputation']);
 Route::get('/users/{user}/profile', [PublicProfileController::class, 'show']);
 Route::get('/users/{user}/publications', [PublicProfileController::class, 'publications']);
 Route::get('/users/{user}/issues', [PublicProfileController::class, 'issues']);
@@ -104,6 +113,7 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::post('/email/verification-notification', [VerifyEmailAcountController::class, 'send'])->middleware('throttle:6,1');
     Route::get('/email/verification-status', [VerifyEmailAcountController::class, 'status']);
 
+    Route::get('/me/profile/dashboard', [ProfileHubController::class, 'me']);
     Route::get('/me/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/me', [ProfileController::class, 'update']);
     Route::post('/me/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:uploads');
@@ -139,6 +149,7 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::get('/chats', [ChatController::class, 'index']);
     Route::post('/chats/direct', [ChatController::class, 'direct'])->middleware('throttle:social');
+    Route::post('/users/{user}/message', [ProfileHubController::class, 'message'])->middleware('throttle:social');
     Route::post('/chats/groups', [ChatController::class, 'group'])->middleware('throttle:social');
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
     Route::get('/chats/{conversation}/messages', [ChatController::class, 'messages']);

@@ -3,6 +3,7 @@
 namespace App\Services\Community;
 
 use App\Events\CommunityNotificationCreated;
+use App\Models\ActivityEvent;
 use App\Models\CommunityActivity;
 use App\Models\CommunityNotification;
 use App\Models\NotificationSetting;
@@ -10,6 +11,7 @@ use App\Models\ReputationEvent;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\Profile\AchievementService;
 use Illuminate\Support\Facades\DB;
 
 class CommunityActivityService
@@ -58,7 +60,7 @@ class CommunityActivityService
         $resolvedTitle = $title ?? $this->activityTitle($type, $actor, $subject, $target);
         $resolvedLink = $link ?? $this->sourceLink($subject) ?? $this->sourceLink($target);
 
-        return CommunityActivity::query()->create([
+        $activity = CommunityActivity::query()->create([
             'actor_id' => $actor?->id,
             'type' => $type,
             'subject_type' => $subject?->getMorphClass(),
@@ -71,6 +73,21 @@ class CommunityActivityService
             'score' => $score,
             'metadata' => $metadata,
         ]);
+
+        if ($actor) {
+            ActivityEvent::query()->create([
+                'user_id' => $actor->id,
+                'actor_id' => $actor->id,
+                'type' => $type,
+                'subject_type' => $subject?->getMorphClass(),
+                'subject_id' => $subject?->getKey(),
+                'metadata' => $metadata + ['title' => $resolvedTitle, 'link' => $resolvedLink],
+                'visibility' => 'public',
+            ]);
+            app(AchievementService::class)->recalculate($actor);
+        }
+
+        return $activity;
     }
 
     public function settingsFor(User $user): NotificationSetting
@@ -108,6 +125,17 @@ class CommunityActivityService
             ]);
 
             $user->increment('reputation_score', $points);
+
+            ActivityEvent::query()->create([
+                'user_id' => $user->id,
+                'actor_id' => $actor?->id,
+                'type' => 'gained_reputation',
+                'subject_type' => $event->getMorphClass(),
+                'subject_id' => $event->getKey(),
+                'metadata' => ['points' => $points, 'reason' => $reason],
+                'visibility' => 'public',
+            ]);
+            app(AchievementService::class)->recalculate($user);
 
             $this->record(
                 $actor,
