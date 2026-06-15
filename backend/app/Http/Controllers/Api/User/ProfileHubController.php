@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\User;
 
+use App\Enums\IssueAnswerStatus;
+use App\Enums\IssueQuestionStatus;
+use App\Enums\PublicationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityEvent;
 use App\Models\ChatConversation;
@@ -11,6 +14,7 @@ use App\Models\FriendRequest;
 use App\Models\Friendship;
 use App\Models\IssueAnswer;
 use App\Models\IssueQuestion;
+use App\Models\PinnedItem;
 use App\Models\Publication;
 use App\Models\Reaction;
 use App\Models\ReputationEvent;
@@ -19,93 +23,782 @@ use App\Models\User;
 use App\Models\UserFile;
 use App\Services\Profile\AchievementService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ProfileHubController extends Controller
 {
+    private const PREVIEW_BYTES = 204800;
+
     public function me(Request $request, AchievementService $achievements): JsonResponse
     {
         $user = $request->user();
         $achievements->recalculate($user);
+
         return response()->json($this->dashboard($request, $user, true, $achievements));
     }
 
     public function public(Request $request, User $user, AchievementService $achievements): JsonResponse
     {
         abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+
         return response()->json($this->dashboard($request, $user, false, $achievements));
     }
 
-    public function materials(Request $request, User $user): JsonResponse { return response()->json(['data' => $this->materialsData($user, $request->query('type', 'all'), false)]); }
-    public function snippets(Request $request, User $user): JsonResponse { return response()->json(['data' => $this->snippetsData($user, false)]); }
-    public function files(Request $request, User $user): JsonResponse { abort_unless($user->show_files_publicly ?? true, 403); return response()->json(['data' => $this->filesData($user, false)]); }
-    public function friends(Request $request, User $user): JsonResponse { abort_unless($user->show_friends_publicly ?? true, 403); return response()->json(['data' => $this->friendsData($user, $request->user())]); }
-    public function activity(Request $request, User $user): JsonResponse { abort_unless($user->show_activity_publicly ?? true, 403); return response()->json(['data' => $this->activityData($user, false)]); }
-    public function achievements(Request $request, User $user, AchievementService $service): JsonResponse { $service->recalculate($user); return response()->json(['data' => $this->achievementsData($user)]); }
-    public function reputation(Request $request, User $user): JsonResponse { return response()->json(['data' => $this->reputationData($user)]); }
+    public function materials(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+
+        return response()->json([
+            'data' => $this->materialsData($user, (string) $request->query('type', 'all'), false),
+        ]);
+    }
+
+    public function snippets(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+
+        return response()->json(['data' => $this->snippetsData($user, false)]);
+    }
+
+    public function files(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+        abort_unless($user->show_files_publicly ?? true, 403, 'Пользователь скрыл файлы.');
+
+        return response()->json(['data' => $this->filesData($user, false)]);
+    }
+
+    public function friends(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+        abort_unless($user->show_friends_publicly ?? true, 403, 'Пользователь скрыл друзей.');
+
+        return response()->json(['data' => $this->friendsData($user, $request->user())]);
+    }
+
+    public function activity(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+        abort_unless($user->show_activity_publicly ?? true, 403, 'Пользователь скрыл активность.');
+
+        return response()->json(['data' => $this->activityData($user, false)]);
+    }
+
+    public function achievements(Request $request, User $user, AchievementService $service): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+        $service->recalculate($user);
+
+        return response()->json(['data' => $this->achievementsData($user)]);
+    }
+
+    public function reputation(Request $request, User $user): JsonResponse
+    {
+        abort_if($user->isProfilePrivate() && ! $this->isFriendOrSelf($request->user(), $user), 403, 'Профиль закрыт пользователем.');
+
+        return response()->json(['data' => $this->reputationData($user)]);
+    }
+
+    public function pin(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'pinnable_type' => ['required', 'string', Rule::in(['publication', 'issue_question', 'issue_answer', 'code_snippet', 'user_file'])],
+            'pinnable_id' => ['required', 'integer', 'min:1'],
+            'position' => ['nullable', 'integer', 'min:0', 'max:50'],
+        ]);
+
+        $target = $this->resolveOwnPinnable($request->user(), $data['pinnable_type'], (int) $data['pinnable_id']);
+
+        $pin = PinnedItem::query()->updateOrCreate(
+            [
+                'user_id' => $request->user()->id,
+                'pinnable_type' => $target->getMorphClass(),
+                'pinnable_id' => $target->getKey(),
+            ],
+            ['position' => (int) ($data['position'] ?? 0)]
+        );
+
+        return response()->json(['data' => $this->pinnedItemData($pin->fresh('pinnable'), true)], 201);
+    }
+
+    public function unpin(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'pinnable_type' => ['required', 'string', Rule::in(['publication', 'issue_question', 'issue_answer', 'code_snippet', 'user_file'])],
+            'pinnable_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $target = $this->resolveOwnPinnable($request->user(), $data['pinnable_type'], (int) $data['pinnable_id']);
+
+        PinnedItem::query()
+            ->where('user_id', $request->user()->id)
+            ->where('pinnable_type', $target->getMorphClass())
+            ->where('pinnable_id', $target->getKey())
+            ->delete();
+
+        return response()->json(['message' => 'Закреп удалён из профиля.']);
+    }
 
     public function message(Request $request, User $user): JsonResponse
     {
         $viewer = $request->user();
         abort_if((int) $viewer->id === (int) $user->id, 422, 'Нельзя создать чат с самим собой.');
-        $ids = [(int) $viewer->id, (int) $user->id]; sort($ids); $key = implode(':', $ids);
+
+        $ids = [(int) $viewer->id, (int) $user->id];
+        sort($ids);
+        $key = implode(':', $ids);
+
         $conversation = DB::transaction(function () use ($viewer, $user, $key) {
-            $conversation = ChatConversation::query()->firstOrCreate(['direct_key' => $key], ['type' => ChatConversation::TYPE_DIRECT, 'owner_id' => $viewer->id, 'last_message_at' => now()]);
+            $conversation = ChatConversation::query()->firstOrCreate(
+                ['direct_key' => $key],
+                ['type' => ChatConversation::TYPE_DIRECT, 'owner_id' => $viewer->id, 'last_message_at' => now()]
+            );
+
             foreach ([$viewer->id, $user->id] as $id) {
-                ChatParticipant::query()->firstOrCreate(['chat_conversation_id' => $conversation->id, 'user_id' => $id], ['role' => ChatParticipant::ROLE_MEMBER, 'joined_at' => now()]);
+                ChatParticipant::query()->firstOrCreate(
+                    ['chat_conversation_id' => $conversation->id, 'user_id' => $id],
+                    ['role' => ChatParticipant::ROLE_MEMBER, 'joined_at' => now()]
+                );
             }
+
             return $conversation;
         });
+
         return response()->json(['data' => ['id' => $conversation->id, 'url' => '/chats?conversation=' . $conversation->id]]);
+    }
+
+    public function downloadFile(Request $request, User $user, UserFile $userFile): BinaryFileResponse
+    {
+        $this->assertPublicFileBelongsTo($user, $userFile);
+
+        $disk = $userFile->disk ?: 'local';
+        abort_unless(Storage::disk($disk)->exists($userFile->path), 404, 'Файл не найден.');
+
+        $filename = str_replace(['"', "\r", "\n"], '', $userFile->original_name ?: basename($userFile->path));
+
+        return response()->download(Storage::disk($disk)->path($userFile->path), $filename);
+    }
+
+    public function previewFile(Request $request, User $user, UserFile $userFile): JsonResponse|BinaryFileResponse
+    {
+        $this->assertPublicFileBelongsTo($user, $userFile);
+        abort_unless($this->canPreview($userFile), 422, 'Предпросмотр недоступен для этого типа файла.');
+
+        $disk = $userFile->disk ?: 'local';
+        abort_unless(Storage::disk($disk)->exists($userFile->path), 404, 'Файл не найден.');
+
+        if (in_array($userFile->kind, ['image', 'pdf', 'audio', 'video'], true)) {
+            return response()->file(Storage::disk($disk)->path($userFile->path), ['X-Content-Type-Options' => 'nosniff']);
+        }
+
+        $stream = Storage::disk($disk)->readStream($userFile->path);
+        $content = $stream ? stream_get_contents($stream, self::PREVIEW_BYTES) : '';
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+
+        return response()->json(['content' => $content, 'truncated' => (int) $userFile->size > self::PREVIEW_BYTES]);
     }
 
     private function dashboard(Request $request, User $user, bool $owner, AchievementService $service): array
     {
         $viewer = $request->user();
+        $canSeeFiles = $owner || ($user->show_files_publicly ?? true);
+        $canSeeActivity = $owner || ($user->show_activity_publicly ?? true);
+
         return [
             'user' => $this->userData($user, $owner),
             'stats' => $this->stats($user),
             'completion' => $service->completion($user),
-            'materials' => $this->materialsData($user, 'all', $owner, 8),
-            'snippets' => $this->snippetsData($user, $owner, 6),
-            'files' => ($owner || ($user->show_files_publicly ?? true)) ? $this->filesData($user, $owner, 6) : [],
+            'pinned_items' => $this->pinnedData($user, $owner, 8),
+            'materials' => $this->materialsData($user, 'all', $owner, 10),
+            'snippets' => $this->snippetsData($user, $owner, 8),
+            'files' => $canSeeFiles ? $this->filesData($user, $owner, 8) : [],
             'friends' => $this->friendsData($user, $viewer, 8),
-            'activity' => ($owner || ($user->show_activity_publicly ?? true)) ? $this->activityData($user, $owner, 12) : [],
+            'activity' => $canSeeActivity ? $this->activityData($user, $owner, 18) : [],
             'achievements' => $this->achievementsData($user),
             'reputation' => $this->reputationData($user),
             'saved_summary' => $owner ? SavedItem::query()->where('user_id', $user->id)->count() : null,
+            'saved_items' => $owner ? $this->savedItemsData($user, 12) : [],
             'relationship_to_viewer' => $owner ? ['is_owner' => true] : $this->relationship($viewer, $user),
         ];
     }
 
     private function userData(User $user, bool $owner): array
     {
-        return collect($user->toArray())->only(['id','name','avatar','cover_url','headline','bio','location','direction','website_url','github_url','profile_visibility','created_at','reputation_score','show_friends_publicly','show_files_publicly','show_activity_publicly'])->when($owner || $user->show_email_publicly, fn ($c) => $c->put('email', $user->email))->all();
+        $data = collect($user->toArray())->only([
+            'id',
+            'name',
+            'avatar',
+            'cover_url',
+            'headline',
+            'bio',
+            'location',
+            'direction',
+            'website_url',
+            'github_url',
+            'profile_visibility',
+            'created_at',
+            'updated_at',
+            'reputation_score',
+            'show_friends_publicly',
+            'show_files_publicly',
+            'show_activity_publicly',
+        ]);
+
+        $data->put('avatar_url', $this->avatarUrl($user));
+        $data->put('reputation_level', $user->reputationLevel());
+
+        if ($owner || $user->show_email_publicly) {
+            $data->put('email', $user->email);
+        }
+
+        return $data->all();
     }
 
-    private function stats(User $u): array
+    private function stats(User $user): array
     {
-        return ['reputation' => (int) $u->reputation_score, 'publications' => $u->publications()->published()->count(), 'questions' => $u->issueQuestions()->published()->count(), 'answers' => $u->issueAnswers()->count(), 'snippets' => $u->codeSnippets()->where('visibility','public')->count(), 'files' => $u->userFiles()->where('visibility','public')->count(), 'friends' => $this->friendIds($u)->count(), 'followers' => $u->subscribers()->count(), 'following' => $u->subscriptions()->count()];
+        return [
+            'reputation' => (int) $user->reputation_score,
+            'publications' => $user->publications()->published()->count(),
+            'questions' => $user->issueQuestions()->published()->count(),
+            'answers' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->count(),
+            'accepted_answers' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->where('is_accepted', true)->count(),
+            'comments' => $user->comments()->published()->count(),
+            'snippets' => $user->codeSnippets()->where('visibility', 'public')->where('status', CodeSnippet::STATUS_ACTIVE)->count(),
+            'files' => $user->userFiles()->where('visibility', 'public')->count(),
+            'pinned' => $user->pinnedItems()->count(),
+            'friends' => $this->friendIds($user)->count(),
+            'followers' => $user->subscribers()->count(),
+            'following' => $user->subscriptions()->count(),
+            'saved' => SavedItem::query()->where('user_id', $user->id)->count(),
+        ];
     }
 
-    private function materialsData(User $u, string $type='all', bool $owner=false, int $limit=50): array
+    private function materialsData(User $user, string $type = 'all', bool $owner = false, int $limit = 50): array
     {
         $items = collect();
-        if ($type === 'all' || $type === 'publications') $items = $items->merge(Publication::query()->published()->where('author_id',$u->id)->withCount(['comments','savedItems','reactions as likes_count'=>fn(Builder $q)=>$q->where('type',Reaction::LIKE)])->latest('published_at')->limit($limit)->get()->map(fn($x)=>['type'=>'publication','id'=>$x->id,'title'=>$x->title,'excerpt'=>$x->excerpt,'url'=>'/publications/'.$x->slug,'score'=>($x->likes_count??0)+($x->saved_items_count??0),'created_at'=>$x->published_at]));
-        if ($type === 'all' || $type === 'questions') $items = $items->merge(IssueQuestion::query()->published()->where('author_id',$u->id)->withCount(['answers','reactions as likes_count'=>fn(Builder $q)=>$q->where('type',Reaction::LIKE)])->latest('published_at')->limit($limit)->get()->map(fn($x)=>['type'=>'question','id'=>$x->id,'title'=>$x->title,'excerpt'=>$x->excerpt,'url'=>'/issues/'.$x->slug,'score'=>($x->likes_count??0)+($x->answers_count??0),'created_at'=>$x->published_at]));
-        if ($type === 'all' || $type === 'answers') $items = $items->merge(IssueAnswer::query()->where('author_id',$u->id)->with('question')->latest()->limit($limit)->get()->map(fn($x)=>['type'=>'answer','id'=>$x->id,'title'=>'Ответ: '.($x->question->title ?? 'вопрос'),'excerpt'=>str($x->body ?? '')->limit(140)->toString(),'url'=>'/issues/'.($x->question->slug ?? ''),'score'=>0,'created_at'=>$x->created_at]));
+
+        if ($type === 'all' || $type === 'publications') {
+            $items = $items->merge(
+                Publication::query()
+                    ->published()
+                    ->where('author_id', $user->id)
+                    ->with('tags')
+                    ->withCount([
+                        'comments',
+                        'savedItems',
+                        'reactions as likes_count' => fn (Builder $query) => $query->where('type', Reaction::LIKE),
+                    ])
+                    ->latest('published_at')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn (Publication $publication) => [
+                        'type' => 'publication',
+                        'id' => $publication->id,
+                        'title' => $publication->title,
+                        'excerpt' => $publication->excerpt,
+                        'url' => '/publications/' . $publication->slug,
+                        'score' => (int) ($publication->likes_count ?? 0) + (int) ($publication->saved_items_count ?? 0) + (int) ($publication->comments_count ?? 0),
+                        'created_at' => $publication->published_at?->toISOString() ?? $publication->created_at?->toISOString(),
+                        'tags' => $publication->tags->map(fn ($tag) => ['name' => $tag->name, 'slug' => $tag->slug])->values()->all(),
+                        'meta' => [
+                            'likes' => (int) ($publication->likes_count ?? 0),
+                            'comments' => (int) ($publication->comments_count ?? 0),
+                            'saved' => (int) ($publication->saved_items_count ?? 0),
+                        ],
+                    ])
+            );
+        }
+
+        if ($type === 'all' || $type === 'questions') {
+            $items = $items->merge(
+                IssueQuestion::query()
+                    ->published()
+                    ->where('author_id', $user->id)
+                    ->with('tags')
+                    ->withCount([
+                        'answers',
+                        'reactions as likes_count' => fn (Builder $query) => $query->where('type', Reaction::LIKE),
+                    ])
+                    ->latest('published_at')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn (IssueQuestion $question) => [
+                        'type' => 'issue_question',
+                        'id' => $question->id,
+                        'title' => $question->title,
+                        'excerpt' => $question->excerpt,
+                        'url' => '/questions/' . $question->slug,
+                        'score' => (int) ($question->likes_count ?? 0) + (int) ($question->answers_count ?? 0),
+                        'created_at' => $question->published_at?->toISOString() ?? $question->created_at?->toISOString(),
+                        'tags' => $question->tags->map(fn ($tag) => ['name' => $tag->name, 'slug' => $tag->slug])->values()->all(),
+                        'meta' => [
+                            'likes' => (int) ($question->likes_count ?? 0),
+                            'answers' => (int) ($question->answers_count ?? 0),
+                            'solved' => (bool) $question->is_solved,
+                        ],
+                    ])
+            );
+        }
+
+        if ($type === 'all' || $type === 'answers') {
+            $items = $items->merge(
+                IssueAnswer::query()
+                    ->where('author_id', $user->id)
+                    ->where('status', IssueAnswerStatus::Published->value)
+                    ->with(['question', 'blocks'])
+                    ->latest()
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn (IssueAnswer $answer) => [
+                        'type' => 'issue_answer',
+                        'id' => $answer->id,
+                        'title' => 'Ответ: ' . ($answer->question->title ?? 'вопрос'),
+                        'excerpt' => $this->answerExcerpt($answer),
+                        'url' => $answer->question?->slug ? '/questions/' . $answer->question->slug . '#answer-' . $answer->id : '/questions',
+                        'score' => $answer->is_accepted ? 10 : 0,
+                        'created_at' => $answer->created_at?->toISOString(),
+                        'meta' => [
+                            'accepted' => (bool) $answer->is_accepted,
+                        ],
+                    ])
+            );
+        }
+
         return $items->sortByDesc('created_at')->take($limit)->values()->all();
     }
 
-    private function snippetsData(User $u, bool $owner, int $limit=50): array { return CodeSnippet::query()->where('user_id',$u->id)->when(! $owner, fn($q)=>$q->where('visibility','public')->where('status',CodeSnippet::STATUS_ACTIVE))->withCount('runs')->latest()->limit($limit)->get(['id','title','language','snippet_type','visibility','status','created_at','updated_at'])->map(fn($s)=>$s->toArray()+['url'=>'/playground?snippet='.$s->id])->all(); }
-    private function filesData(User $u, bool $owner, int $limit=50): array { return UserFile::query()->where('user_id',$u->id)->when(! $owner, fn($q)=>$q->where('visibility','public'))->with('folder')->latest()->limit($limit)->get(['id','folder_id','title','original_name','mime_type','size','kind','visibility','created_at'])->map(fn($f)=>$f->toArray()+['download_url'=>'/api/me/files/'.$f->id.'/download'])->all(); }
-    private function friendsData(User $u, ?User $viewer, int $limit=50): array { if (!($u->show_friends_publicly ?? true) && (!$viewer || (int)$viewer->id !== (int)$u->id)) return []; $ids=$this->friendIds($u); return User::query()->whereIn('id',$ids)->limit($limit)->get(['id','name','avatar','headline','reputation_score'])->all(); }
-    private function activityData(User $u, bool $owner, int $limit=50): array { return ActivityEvent::query()->where('user_id',$u->id)->when(! $owner, fn($q)=>$q->where('visibility','public'))->latest()->limit($limit)->get()->map(fn($e)=>['id'=>$e->id,'type'=>$e->type,'metadata'=>$e->metadata,'created_at'=>$e->created_at])->all(); }
-    private function achievementsData(User $u): array { return $u->achievements()->with('achievement')->get()->map(fn($ua)=>['key'=>$ua->achievement->key,'name'=>$ua->achievement->name,'description'=>$ua->achievement->description,'category'=>$ua->achievement->category,'points'=>$ua->achievement->points,'rarity'=>$ua->achievement->rarity,'progress'=>$ua->progress,'target'=>$ua->achievement->condition_value,'unlocked_at'=>$ua->unlocked_at])->all(); }
-    private function reputationData(User $u): array { return ['score'=>(int)$u->reputation_score,'level'=>$u->reputationLevel(),'events'=>ReputationEvent::query()->where('user_id',$u->id)->latest()->limit(30)->get(['id','points','reason','description','created_at'])]; }
-    private function relationship(?User $viewer, User $u): array { if(!$viewer) return ['is_owner'=>false,'is_following'=>false,'is_friend'=>false,'friend_request_status'=>null,'can_message'=>false]; $isFriend=$this->isFriendOrSelf($viewer,$u); $pending=FriendRequest::query()->where('status',FriendRequest::STATUS_PENDING)->where(fn($q)=>$q->where(fn($x)=>$x->where('sender_id',$viewer->id)->where('recipient_id',$u->id))->orWhere(fn($x)=>$x->where('sender_id',$u->id)->where('recipient_id',$viewer->id)))->first(); return ['is_owner'=>false,'is_following'=>$viewer->subscriptions()->where('subscribable_type',User::class)->where('subscribable_id',$u->id)->exists(),'is_friend'=>$isFriend,'friend_request_status'=>$pending?((int)$pending->sender_id===(int)$viewer->id?'sent':'incoming'):null,'can_message'=>true,'mutual_friends_count'=>$this->friendIds($viewer)->intersect($this->friendIds($u))->count()]; }
-    private function isFriendOrSelf(?User $a, User $b): bool { return $a && ((int)$a->id===(int)$b->id || $this->friendIds($a)->contains((int)$b->id)); }
-    private function friendIds(User $u) { return Friendship::query()->where(fn($q)=>$q->where('user_one_id',$u->id)->orWhere('user_two_id',$u->id))->get(['user_one_id','user_two_id'])->map(fn($f)=>(int)$f->user_one_id===(int)$u->id?(int)$f->user_two_id:(int)$f->user_one_id); }
+    private function snippetsData(User $user, bool $owner, int $limit = 50): array
+    {
+        return CodeSnippet::query()
+            ->where('user_id', $user->id)
+            ->when(! $owner, fn ($query) => $query->where('visibility', 'public')->where('status', CodeSnippet::STATUS_ACTIVE))
+            ->withCount('runs')
+            ->latest()
+            ->limit($limit)
+            ->get(['id', 'title', 'language', 'snippet_type', 'visibility', 'status', 'last_run_status', 'last_run_at', 'created_at', 'updated_at'])
+            ->map(fn (CodeSnippet $snippet) => [
+                'type' => 'code_snippet',
+                'id' => $snippet->id,
+                'title' => $snippet->title,
+                'language' => $snippet->language,
+                'snippet_type' => $snippet->snippet_type,
+                'visibility' => $snippet->visibility,
+                'status' => $snippet->status,
+                'last_run_status' => $snippet->last_run_status,
+                'runs_count' => (int) ($snippet->runs_count ?? 0),
+                'url' => '/playground?snippet=' . $snippet->id,
+                'created_at' => $snippet->created_at?->toISOString(),
+                'updated_at' => $snippet->updated_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function filesData(User $user, bool $owner, int $limit = 50): array
+    {
+        return UserFile::query()
+            ->where('user_id', $user->id)
+            ->when(! $owner, fn ($query) => $query->where('visibility', 'public'))
+            ->with('folder')
+            ->orderByRaw('CASE WHEN pinned_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('pinned_at')
+            ->latest('id')
+            ->limit($limit)
+            ->get(['id', 'user_id', 'folder_id', 'title', 'original_name', 'mime_type', 'size', 'kind', 'visibility', 'pinned_at', 'created_at', 'updated_at'])
+            ->map(fn (UserFile $file) => $this->fileItemData($file, $owner))
+            ->values()
+            ->all();
+    }
+
+    private function fileItemData(UserFile $file, bool $owner): array
+    {
+        $canDownload = $owner || $file->visibility === 'public';
+        $publicDownloadUrl = '/api/laravel-file/users/' . $file->user_id . '/files/' . $file->id . '/download';
+        $publicPreviewUrl = '/api/laravel-file/users/' . $file->user_id . '/files/' . $file->id . '/preview';
+
+        return [
+            'type' => 'user_file',
+            'id' => $file->id,
+            'title' => $file->title ?: $file->original_name,
+            'original_name' => $file->original_name,
+            'mime_type' => $file->mime_type,
+            'size' => (int) $file->size,
+            'kind' => $file->kind,
+            'visibility' => $file->visibility,
+            'is_pinned' => $file->pinned_at !== null,
+            'folder' => $file->relationLoaded('folder') && $file->folder ? [
+                'id' => $file->folder->id,
+                'name' => $file->folder->name,
+                'color' => $file->folder->color,
+            ] : null,
+            'url' => '/files/' . $file->id,
+            'download_url' => $canDownload ? ($owner ? '/api/laravel-file/me/files/' . $file->id . '/download' : $publicDownloadUrl) : null,
+            'preview_url' => $canDownload && $this->canPreview($file) ? ($owner ? '/api/laravel-file/me/files/' . $file->id . '/preview' : $publicPreviewUrl) : null,
+            'created_at' => $file->created_at?->toISOString(),
+            'updated_at' => $file->updated_at?->toISOString(),
+        ];
+    }
+
+    private function friendsData(User $user, ?User $viewer, int $limit = 50): array
+    {
+        if (! ($user->show_friends_publicly ?? true) && (! $viewer || (int) $viewer->id !== (int) $user->id)) {
+            return [];
+        }
+
+        $ids = $this->friendIds($user);
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->limit($limit)
+            ->get(['id', 'name', 'avatar', 'headline', 'reputation_score'])
+            ->map(fn (User $friend) => [
+                'type' => 'user',
+                'id' => $friend->id,
+                'title' => $friend->name,
+                'name' => $friend->name,
+                'headline' => $friend->headline,
+                'avatar' => $friend->avatar,
+                'avatar_url' => $this->avatarUrl($friend),
+                'reputation_score' => (int) $friend->reputation_score,
+                'url' => '/users/' . $friend->id,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function activityData(User $user, bool $owner, int $limit = 50): array
+    {
+        return ActivityEvent::query()
+            ->where('user_id', $user->id)
+            ->when(! $owner, fn ($query) => $query->where('visibility', 'public'))
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(fn (ActivityEvent $event) => [
+                'id' => $event->id,
+                'type' => $event->type,
+                'title' => $event->metadata['title'] ?? $this->activityTitle($event->type),
+                'description' => $event->metadata['description'] ?? null,
+                'url' => $event->metadata['url'] ?? null,
+                'metadata' => $event->metadata,
+                'created_at' => $event->created_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function achievementsData(User $user): array
+    {
+        return $user->achievements()
+            ->with('achievement')
+            ->get()
+            ->map(fn ($userAchievement) => [
+                'type' => 'achievement',
+                'key' => $userAchievement->achievement->key,
+                'id' => $userAchievement->achievement->id,
+                'title' => $userAchievement->achievement->name,
+                'name' => $userAchievement->achievement->name,
+                'description' => $userAchievement->achievement->description,
+                'category' => $userAchievement->achievement->category,
+                'points' => $userAchievement->achievement->points,
+                'rarity' => $userAchievement->achievement->rarity,
+                'progress' => $userAchievement->progress,
+                'target' => $userAchievement->achievement->condition_value,
+                'unlocked_at' => $userAchievement->unlocked_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function reputationData(User $user): array
+    {
+        return [
+            'score' => (int) $user->reputation_score,
+            'level' => $user->reputationLevel(),
+            'events' => ReputationEvent::query()
+                ->where('user_id', $user->id)
+                ->latest()
+                ->limit(30)
+                ->get(['id', 'points', 'reason', 'description', 'created_at'])
+                ->map(fn (ReputationEvent $event) => [
+                    'id' => $event->id,
+                    'type' => 'reputation_event',
+                    'title' => $event->description ?: $event->reason,
+                    'description' => $event->reason,
+                    'points' => (int) $event->points,
+                    'created_at' => $event->created_at?->toISOString(),
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function pinnedData(User $user, bool $owner, int $limit = 8): array
+    {
+        return PinnedItem::query()
+            ->where('user_id', $user->id)
+            ->with('pinnable')
+            ->orderBy('position')
+            ->latest('id')
+            ->limit($limit)
+            ->get()
+            ->map(fn (PinnedItem $pin) => $this->pinnedItemData($pin, $owner))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function pinnedItemData(?PinnedItem $pin, bool $owner): ?array
+    {
+        if (! $pin || ! $pin->pinnable) {
+            return null;
+        }
+
+        $item = $this->modelToHubItem($pin->pinnable, $owner);
+
+        if (! $item) {
+            return null;
+        }
+
+        return array_merge($item, [
+            'pin_id' => $pin->id,
+            'position' => (int) $pin->position,
+            'pinned_at' => $pin->created_at?->toISOString(),
+        ]);
+    }
+
+    private function savedItemsData(User $user, int $limit = 12): array
+    {
+        return SavedItem::query()
+            ->where('user_id', $user->id)
+            ->with('saveable')
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(function (SavedItem $saved) {
+                $item = $this->modelToHubItem($saved->saveable, true);
+
+                return $item ? array_merge($item, [
+                    'saved_id' => $saved->id,
+                    'saved_at' => $saved->created_at?->toISOString(),
+                ]) : null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function modelToHubItem(?Model $model, bool $owner): ?array
+    {
+        if ($model instanceof Publication) {
+            if (($model->status?->value ?? $model->status) !== PublicationStatus::Published->value) {
+                return null;
+            }
+
+            return [
+                'type' => 'publication',
+                'id' => $model->id,
+                'title' => $model->title,
+                'excerpt' => $model->excerpt,
+                'url' => '/publications/' . $model->slug,
+                'created_at' => $model->published_at?->toISOString() ?? $model->created_at?->toISOString(),
+            ];
+        }
+
+        if ($model instanceof IssueQuestion) {
+            if (($model->status?->value ?? $model->status) !== IssueQuestionStatus::Published->value) {
+                return null;
+            }
+
+            return [
+                'type' => 'issue_question',
+                'id' => $model->id,
+                'title' => $model->title,
+                'excerpt' => $model->excerpt,
+                'url' => '/questions/' . $model->slug,
+                'created_at' => $model->published_at?->toISOString() ?? $model->created_at?->toISOString(),
+            ];
+        }
+
+        if ($model instanceof IssueAnswer) {
+            if (($model->status?->value ?? $model->status) !== IssueAnswerStatus::Published->value) {
+                return null;
+            }
+
+            $question = $model->relationLoaded('question') ? $model->question : $model->question()->first();
+
+            return [
+                'type' => 'issue_answer',
+                'id' => $model->id,
+                'title' => 'Ответ: ' . ($question?->title ?? 'вопрос'),
+                'excerpt' => $this->answerExcerpt($model),
+                'url' => $question?->slug ? '/questions/' . $question->slug . '#answer-' . $model->id : '/questions',
+                'created_at' => $model->created_at?->toISOString(),
+            ];
+        }
+
+        if ($model instanceof CodeSnippet) {
+            if (! $owner && ! $model->isPublic()) {
+                return null;
+            }
+
+            return [
+                'type' => 'code_snippet',
+                'id' => $model->id,
+                'title' => $model->title,
+                'language' => $model->language,
+                'snippet_type' => $model->snippet_type,
+                'visibility' => $model->visibility,
+                'status' => $model->status,
+                'url' => '/playground?snippet=' . $model->id,
+                'created_at' => $model->created_at?->toISOString(),
+            ];
+        }
+
+        if ($model instanceof UserFile) {
+            if (! $owner && ! $model->isPublic()) {
+                return null;
+            }
+
+            return $this->fileItemData($model, $owner);
+        }
+
+        return null;
+    }
+
+    private function resolveOwnPinnable(User $user, string $type, int $id): Model
+    {
+        return match ($type) {
+            'publication' => Publication::query()
+                ->where('author_id', $user->id)
+                ->where('status', PublicationStatus::Published->value)
+                ->findOrFail($id),
+            'issue_question' => IssueQuestion::query()
+                ->where('author_id', $user->id)
+                ->where('status', IssueQuestionStatus::Published->value)
+                ->findOrFail($id),
+            'issue_answer' => IssueAnswer::query()
+                ->where('author_id', $user->id)
+                ->where('status', IssueAnswerStatus::Published->value)
+                ->whereHas('question', fn ($query) => $query->where('status', IssueQuestionStatus::Published->value))
+                ->findOrFail($id),
+            'code_snippet' => CodeSnippet::query()
+                ->where('user_id', $user->id)
+                ->where('visibility', 'public')
+                ->where('status', CodeSnippet::STATUS_ACTIVE)
+                ->findOrFail($id),
+            'user_file' => UserFile::query()
+                ->where('user_id', $user->id)
+                ->where('visibility', 'public')
+                ->findOrFail($id),
+            default => abort(422, 'Неподдерживаемый тип закрепа.'),
+        };
+    }
+
+    private function answerExcerpt(IssueAnswer $answer): string
+    {
+        $blocks = $answer->relationLoaded('blocks') ? $answer->blocks : $answer->blocks()->limit(3)->get();
+
+        foreach ($blocks as $block) {
+            $content = $block->content ?? [];
+            $text = $content['text'] ?? $content['code'] ?? null;
+
+            if (is_string($text) && trim($text) !== '') {
+                return str($text)->limit(180)->toString();
+            }
+        }
+
+        return 'Ответ без текстового блока';
+    }
+
+    private function relationship(?User $viewer, User $user): array
+    {
+        if (! $viewer) {
+            return [
+                'is_owner' => false,
+                'is_following' => false,
+                'is_friend' => false,
+                'friend_request_status' => null,
+                'can_message' => false,
+            ];
+        }
+
+        $isFriend = $this->isFriendOrSelf($viewer, $user);
+        $pending = FriendRequest::query()
+            ->where('status', FriendRequest::STATUS_PENDING)
+            ->where(fn ($query) => $query
+                ->where(fn ($nested) => $nested->where('sender_id', $viewer->id)->where('recipient_id', $user->id))
+                ->orWhere(fn ($nested) => $nested->where('sender_id', $user->id)->where('recipient_id', $viewer->id)))
+            ->first();
+
+        return [
+            'is_owner' => false,
+            'is_following' => $viewer->subscriptions()
+                ->where('subscribable_type', User::class)
+                ->where('subscribable_id', $user->id)
+                ->exists(),
+            'is_friend' => $isFriend,
+            'friend_request_status' => $pending ? ((int) $pending->sender_id === (int) $viewer->id ? 'sent' : 'incoming') : null,
+            'can_message' => true,
+            'mutual_friends_count' => $this->friendIds($viewer)->intersect($this->friendIds($user))->count(),
+        ];
+    }
+
+    private function isFriendOrSelf(?User $a, User $b): bool
+    {
+        return $a && ((int) $a->id === (int) $b->id || $this->friendIds($a)->contains((int) $b->id));
+    }
+
+    private function friendIds(User $user)
+    {
+        return Friendship::query()
+            ->where(fn ($query) => $query->where('user_one_id', $user->id)->orWhere('user_two_id', $user->id))
+            ->get(['user_one_id', 'user_two_id'])
+            ->map(fn ($friendship) => (int) $friendship->user_one_id === (int) $user->id ? (int) $friendship->user_two_id : (int) $friendship->user_one_id);
+    }
+
+    private function assertPublicFileBelongsTo(User $user, UserFile $file): void
+    {
+        abort_unless((int) $file->user_id === (int) $user->id, 404, 'Файл не найден.');
+        abort_unless($file->visibility === 'public', 403, 'Файл не является публичным.');
+    }
+
+    private function canPreview(UserFile $file): bool
+    {
+        return in_array($file->kind, ['image', 'pdf', 'text', 'audio', 'video'], true);
+    }
+
+    private function avatarUrl(User $user): ?string
+    {
+        if (! $user->avatar) {
+            return null;
+        }
+
+        if (filter_var($user->avatar, FILTER_VALIDATE_URL)) {
+            return $user->avatar;
+        }
+
+        return Storage::disk('public')->url($user->avatar);
+    }
+
+    private function activityTitle(string $type): string
+    {
+        return match ($type) {
+            'publication_created' => 'Опубликовал материал',
+            'issue_question_created' => 'Задал вопрос',
+            'issue_answer_created' => 'Ответил на вопрос',
+            'comment_created' => 'Оставил комментарий',
+            'file_uploaded' => 'Загрузил файл',
+            'snippet_created' => 'Опубликовал сниппет',
+            default => 'Событие профиля',
+        };
+    }
 }

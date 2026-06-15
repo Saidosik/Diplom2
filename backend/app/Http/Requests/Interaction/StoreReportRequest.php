@@ -19,7 +19,7 @@ class StoreReportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reportable_type' => ['required', 'string', Rule::in(['publication', 'issue_question', 'issue_answer', 'comment'])],
+            'reportable_type' => ['required', 'string', Rule::in(['publication', 'issue_question', 'issue_answer', 'comment', 'user'])],
             'reportable_id' => ['required', 'integer', 'min:1'],
             'reason' => ['required', 'string', Rule::in(Report::reasons())],
             'details' => ['nullable', 'string', 'max:2000'],

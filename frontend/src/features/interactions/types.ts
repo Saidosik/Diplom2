@@ -2,7 +2,7 @@ export type ReactionType = "like" | "dislike"
 
 export type CommentTargetType = "publication" | "issue_question" | "issue_answer"
 export type ReactionTargetType = "publication" | "issue_question"
-export type ReportTargetType = "publication" | "issue_question" | "issue_answer" | "comment"
+export type ReportTargetType = "publication" | "issue_question" | "issue_answer" | "comment" | "user"
 
 export type PaginationMeta = {
     current_page?: number

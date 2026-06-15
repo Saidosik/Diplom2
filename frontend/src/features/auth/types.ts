@@ -19,12 +19,18 @@ export type User = {
   reputation_level?: { label: string; next_label?: string | null; progress: number } | null
   avatar?: string | null
   avatar_url?: string | null
+  cover_url?: string | null
   headline?: string | null
   bio?: string | null
   location?: string | null
+  direction?: string | null
   website_url?: string | null
   github_url?: string | null
   profile_visibility?: "public" | "private" | string
+  show_email_publicly?: boolean
+  show_friends_publicly?: boolean
+  show_files_publicly?: boolean
+  show_activity_publicly?: boolean
   is_profile_private?: boolean
   presence_status?: "online" | "offline" | string
   is_online?: boolean
@@ -65,9 +71,14 @@ export type UpdateProfileDto = {
   headline?: string | null
   bio?: string | null
   location?: string | null
+  direction?: string | null
   website_url?: string | null
   github_url?: string | null
   profile_visibility?: "public" | "private"
+  show_email_publicly?: boolean
+  show_friends_publicly?: boolean
+  show_files_publicly?: boolean
+  show_activity_publicly?: boolean
 }
 
 export type AuthMeResponse = {

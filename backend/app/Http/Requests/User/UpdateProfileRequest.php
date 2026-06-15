@@ -24,6 +24,7 @@ class UpdateProfileRequest extends FormRequest
             'location',
             'website_url',
             'github_url',
+            'direction',
         ];
 
         foreach ($nullableFields as $field) {
@@ -54,9 +55,14 @@ class UpdateProfileRequest extends FormRequest
             'headline' => ['nullable', 'string', 'max:120'],
             'bio' => ['nullable', 'string', 'max:1000'],
             'location' => ['nullable', 'string', 'max:120'],
+            'direction' => ['nullable', 'string', 'max:120'],
             'website_url' => ['nullable', 'url', 'max:255'],
             'github_url' => ['nullable', 'url', 'max:255'],
             'profile_visibility' => ['sometimes', Rule::in(['public', 'private'])],
+            'show_email_publicly' => ['sometimes', 'boolean'],
+            'show_friends_publicly' => ['sometimes', 'boolean'],
+            'show_files_publicly' => ['sometimes', 'boolean'],
+            'show_activity_publicly' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -73,6 +79,7 @@ class UpdateProfileRequest extends FormRequest
             'email.unique' => 'Пользователь с таким email уже существует.',
             'headline.max' => 'Короткое описание не должно быть длиннее 120 символов.',
             'bio.max' => 'Описание профиля не должно быть длиннее 1000 символов.',
+            'direction.max' => 'Направление не должно быть длиннее 120 символов.',
             'website_url.url' => 'Введите корректную ссылку на сайт.',
             'github_url.url' => 'Введите корректную ссылку на GitHub.',
             'profile_visibility.in' => 'Выберите публичный или закрытый профиль.',

@@ -13,6 +13,7 @@ use App\Models\IssueAnswer;
 use App\Models\IssueQuestion;
 use App\Models\Publication;
 use App\Models\Report;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class ReportController extends Controller
@@ -21,6 +22,10 @@ class ReportController extends Controller
     {
         $data = $request->validated();
         $target = $this->resolveTarget($data['reportable_type'], (int) $data['reportable_id']);
+
+        if ($target instanceof User && (int) $target->id === (int) $request->user()->id) {
+            abort(422, 'Нельзя пожаловаться на собственный профиль.');
+        }
 
         $report = Report::query()->firstOrCreate(
             [
@@ -62,6 +67,10 @@ class ReportController extends Controller
             'comment' => Comment::query()
                 ->published()
                 ->findOrFail($id),
+            'user' => User::query()
+                ->whereKey($id)
+                ->whereNull('deleted_at')
+                ->firstOrFail(),
             default => abort(422, 'Неподдерживаемый тип объекта для жалобы.'),
         };
     }

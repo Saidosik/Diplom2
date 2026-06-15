@@ -52,6 +52,8 @@ Route::get('/users/{user}/profile/dashboard', [ProfileHubController::class, 'pub
 Route::get('/users/{user}/materials', [ProfileHubController::class, 'materials']);
 Route::get('/users/{user}/snippets', [ProfileHubController::class, 'snippets']);
 Route::get('/users/{user}/files', [ProfileHubController::class, 'files']);
+Route::get('/users/{user}/files/{userFile}/download', [ProfileHubController::class, 'downloadFile'])->middleware('throttle:uploads');
+Route::get('/users/{user}/files/{userFile}/preview', [ProfileHubController::class, 'previewFile'])->middleware('throttle:uploads');
 Route::get('/users/{user}/friends', [ProfileHubController::class, 'friends']);
 Route::get('/users/{user}/activity', [ProfileHubController::class, 'activity']);
 Route::get('/users/{user}/achievements', [ProfileHubController::class, 'achievements']);
@@ -116,6 +118,8 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::get('/email/verification-status', [VerifyEmailAcountController::class, 'status']);
 
     Route::get('/me/profile/dashboard', [ProfileHubController::class, 'me']);
+    Route::post('/me/profile/pins', [ProfileHubController::class, 'pin'])->middleware('throttle:social');
+    Route::delete('/me/profile/pins', [ProfileHubController::class, 'unpin'])->middleware('throttle:social');
     Route::get('/me/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/me', [ProfileController::class, 'update']);
     Route::post('/me/avatar', [ProfileController::class, 'updateAvatar'])->middleware('throttle:uploads');

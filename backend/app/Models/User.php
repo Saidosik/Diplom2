@@ -197,6 +197,11 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmailContrac
         return $this->hasMany(SavedItem::class, 'user_id');
     }
 
+    public function pinnedItems(): HasMany
+    {
+        return $this->hasMany(PinnedItem::class, 'user_id');
+    }
+
 
     public function sentFriendRequests(): HasMany
     {

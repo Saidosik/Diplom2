@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -35,9 +36,14 @@ function getInitialForm(user: User): UpdateProfileDto {
         headline: user.headline ?? "",
         bio: user.bio ?? "",
         location: user.location ?? "",
+        direction: user.direction ?? "",
         website_url: user.website_url ?? "",
         github_url: user.github_url ?? "",
         profile_visibility: user.profile_visibility === "private" ? "private" : "public",
+        show_email_publicly: Boolean(user.show_email_publicly),
+        show_friends_publicly: user.show_friends_publicly ?? true,
+        show_files_publicly: user.show_files_publicly ?? true,
+        show_activity_publicly: user.show_activity_publicly ?? true,
     }
 }
 
@@ -86,7 +92,7 @@ export function ProfileSettingsCard({ user }: ProfileSettingsCardProps) {
         return JSON.stringify(form) !== JSON.stringify(initialForm)
     }, [form, initialForm])
 
-    function updateField(field: keyof UpdateProfileDto, value: string) {
+    function updateField(field: keyof UpdateProfileDto, value: string | boolean) {
         setForm((current) => ({
             ...current,
             [field]: value,
@@ -239,7 +245,7 @@ export function ProfileSettingsCard({ user }: ProfileSettingsCardProps) {
                             <p className="text-xs text-muted-foreground">Краткое описание профиля, которое увидят другие пользователи.</p>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-3">
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <div className="space-y-2">
                                 <Label htmlFor="profile-location">Город</Label>
                                 <Input
@@ -247,6 +253,16 @@ export function ProfileSettingsCard({ user }: ProfileSettingsCardProps) {
                                     value={form.location ?? ""}
                                     onChange={(event) => updateField("location", event.target.value)}
                                     placeholder="Казань"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="profile-direction">Направление</Label>
+                                <Input
+                                    id="profile-direction"
+                                    value={form.direction ?? ""}
+                                    onChange={(event) => updateField("direction", event.target.value)}
+                                    placeholder="Backend / DevOps / Security"
                                 />
                             </div>
 
@@ -288,6 +304,33 @@ export function ProfileSettingsCard({ user }: ProfileSettingsCardProps) {
                                     </SelectContent>
                                 </Select>
                             </div>
+                        </div>
+
+                        <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 md:grid-cols-2">
+                            <PrivacyToggle
+                                title="Показывать email"
+                                description="Email появится только в публичном профиле."
+                                checked={Boolean(form.show_email_publicly)}
+                                onCheckedChange={(checked) => updateField("show_email_publicly", checked)}
+                            />
+                            <PrivacyToggle
+                                title="Показывать друзей"
+                                description="Список друзей будет виден другим участникам."
+                                checked={form.show_friends_publicly ?? true}
+                                onCheckedChange={(checked) => updateField("show_friends_publicly", checked)}
+                            />
+                            <PrivacyToggle
+                                title="Показывать файлы"
+                                description="В профиле будут видны публичные файлы из хранилища."
+                                checked={form.show_files_publicly ?? true}
+                                onCheckedChange={(checked) => updateField("show_files_publicly", checked)}
+                            />
+                            <PrivacyToggle
+                                title="Показывать активность"
+                                description="Публичная лента действий будет доступна в профиле."
+                                checked={form.show_activity_publicly ?? true}
+                                onCheckedChange={(checked) => updateField("show_activity_publicly", checked)}
+                            />
                         </div>
 
                         <div className="rounded-xl border bg-muted/30 p-4">
@@ -432,6 +475,28 @@ export function ProfileSettingsCard({ user }: ProfileSettingsCardProps) {
                     </CardContent>
                 </Card>
             </aside>
+        </div>
+    )
+}
+
+function PrivacyToggle({
+    title,
+    description,
+    checked,
+    onCheckedChange,
+}: {
+    title: string
+    description: string
+    checked: boolean
+    onCheckedChange: (checked: boolean) => void
+}) {
+    return (
+        <div className="flex items-start justify-between gap-4 border bg-background/40 p-3">
+            <div className="space-y-1">
+                <p className="text-sm font-medium">{title}</p>
+                <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+            </div>
+            <Switch checked={checked} onCheckedChange={onCheckedChange} />
         </div>
     )
 }

@@ -12,6 +12,7 @@ use App\Models\IssueAnswer;
 use App\Models\IssueQuestion;
 use App\Models\Publication;
 use App\Models\Report;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -219,6 +220,18 @@ class AdminReportController extends Controller
                 'title' => mb_strimwidth($target->content, 0, 90, '…'),
                 'status' => $target->status,
                 'href' => null,
+                'deleted_at' => $target->deleted_at?->toISOString(),
+            ];
+        }
+
+
+        if ($target instanceof User) {
+            return [
+                'type' => 'user',
+                'id' => $target->id,
+                'title' => $target->name,
+                'status' => $target->deleted_at ? 'deleted' : ($target->profile_visibility ?? 'public'),
+                'href' => '/users/' . $target->id,
                 'deleted_at' => $target->deleted_at?->toISOString(),
             ];
         }
