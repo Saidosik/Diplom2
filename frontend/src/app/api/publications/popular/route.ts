@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isAxiosError } from "axios"
 
+import { getAccessTokenCookie } from "@/lib/auth/cookies"
 import createLaravelApi from "@/lib/http/laravel"
 import type { PopularPublicationPeriod, PopularPublicationsResponse } from "@/features/publications/types"
 
@@ -9,6 +10,7 @@ const DEFAULT_PERIOD: PopularPublicationPeriod = "week"
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 24
 const REVALIDATE_SECONDS = 60
+const AUTH_ERROR_STATUSES = new Set([401, 403])
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
@@ -20,22 +22,38 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") || "all"
 
     try {
-        const api = createLaravelApi()
-        const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", {
-            params: {
-                period,
-                limit,
-                page,
-                sort,
-                type: type === "all" ? undefined : type,
-            },
-        })
+        const token = await getAccessTokenCookie()
+        const params = {
+            period,
+            limit,
+            page,
+            sort,
+            type: type === "all" ? undefined : type,
+        }
 
-        return NextResponse.json(response.data, {
-            headers: {
-                "Cache-Control": `public, s-maxage=${REVALIDATE_SECONDS}, stale-while-revalidate=${REVALIDATE_SECONDS * 2}`,
-            },
-        })
+        try {
+            const api = createLaravelApi(token)
+            const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", { params })
+
+            return NextResponse.json(response.data, {
+                headers: token
+                    ? { "Cache-Control": "private, no-store" }
+                    : {
+                        "Cache-Control": `public, s-maxage=${REVALIDATE_SECONDS}, stale-while-revalidate=${REVALIDATE_SECONDS * 2}`,
+                    },
+            })
+        } catch (error) {
+            if (token && isAxiosError(error) && AUTH_ERROR_STATUSES.has(error.response?.status ?? 0)) {
+                const publicApi = createLaravelApi()
+                const response = await publicApi.get<PopularPublicationsResponse>("/community/popular-publications", { params })
+
+                return NextResponse.json(response.data, {
+                    headers: { "Cache-Control": "private, no-store" },
+                })
+            }
+
+            throw error
+        }
     } catch (error) {
         if (isAxiosError(error)) {
             return NextResponse.json(
