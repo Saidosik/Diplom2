@@ -1,4 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
+import { normalizeFeedItems } from "@/features/community/lib/response-normalizers"
 import type {
     CommunityNotification,
     NotificationCollectionResponse,
@@ -9,7 +10,6 @@ import type {
     CommunityTopUser,
     CommunityTrend,
     CommunityRecommendation,
-    CommunityFeedItem,
     InterestProfile,
 } from "@/features/community/types"
 
@@ -19,8 +19,8 @@ export async function getCommunityDiscovery(period: "day" | "week" | "month" = "
 }
 
 export async function getCommunityFeed(period: "day" | "week" | "month" = "week") {
-    const response = await browserApi.get<{ period: string; data: CommunityFeedItem[] }>("/laravel/community/feed", { params: { period } })
-    return response.data
+    const response = await browserApi.get<unknown>("/laravel/community/feed", { params: { period } })
+    return { period, data: normalizeFeedItems(response.data) }
 }
 
 export async function getCommunityTrends(period: "day" | "week" | "month" = "week") {
