@@ -189,6 +189,8 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
     Route::post('/ai/content/sources', [AiAssistantController::class, 'contentSources'])->middleware('throttle:ai');
     Route::post('/ai/search/answer', [AiAssistantController::class, 'searchAnswer'])->middleware('throttle:ai');
     Route::post('/ai/publication/assist', [AiAssistantController::class, 'publicationAssist'])->middleware('throttle:ai');
+    Route::post('/ai/publication/copilot', [PublicationController::class, 'aiCopilot'])->middleware('throttle:ai');
+    Route::patch('/ai/publication/suggestions/{suggestion}', [PublicationController::class, 'resolveAiSuggestion'])->middleware('throttle:ai');
     Route::post('/ai/issues/{issueQuestion}/answer-draft', [AiAssistantController::class, 'answerDraft'])->middleware('throttle:ai');
 
     Route::get('/me/notification-settings', [NotificationSettingController::class, 'show']);
@@ -211,10 +213,28 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
 
     Route::get('/me/publications', [PublicationController::class, 'myIndex']);
+    Route::get('/me/publication-drafts', [PublicationController::class, 'drafts']);
+    Route::post('/publications/create-draft-if-not-exists', [PublicationController::class, 'createDraftIfNotExists'])->middleware('throttle:content-write');
+    Route::post('/publications/analyze-quality', [PublicationController::class, 'analyzeQuality'])->middleware('throttle:content-write');
+    Route::post('/publications/import-markdown', [PublicationController::class, 'importMarkdown'])->middleware('throttle:content-write');
+    Route::get('/publication-templates', [PublicationController::class, 'templates']);
+    Route::post('/publication-templates', [PublicationController::class, 'storeTemplate'])->middleware('throttle:content-write');
+    Route::delete('/publication-templates/{template}', [PublicationController::class, 'destroyTemplate']);
+    Route::post('/publication-templates/{template}/apply', [PublicationController::class, 'applyTemplate']);
     Route::get('/me/publications/by-slug/{publication}', [PublicationController::class, 'showMineBySlug']);
     Route::get('/me/publications/{publication}', [PublicationController::class, 'edit']);
     Route::post('/publications', [PublicationController::class, 'store'])->middleware('throttle:content-write');
     Route::match(['put', 'patch'], '/publications/{publication}', [PublicationController::class, 'update'])->middleware('throttle:content-write');
+    Route::post('/publications/{publication}/autosave', [PublicationController::class, 'autosave'])->middleware('throttle:content-write');
+    Route::post('/publications/{publication}/duplicate', [PublicationController::class, 'duplicateDraft'])->middleware('throttle:content-write');
+    Route::post('/publications/{publication}/publish-draft', [PublicationController::class, 'publishDraft'])->middleware('throttle:content-write');
+    Route::get('/publications/{publication}/versions', [PublicationController::class, 'versions']);
+    Route::get('/publications/{publication}/versions/{version}', [PublicationController::class, 'version']);
+    Route::post('/publications/{publication}/versions/{version}/restore', [PublicationController::class, 'restoreVersion'])->middleware('throttle:content-write');
+    Route::post('/publications/{publication}/prepublish-check', [PublicationController::class, 'prepublishCheck'])->middleware('throttle:content-write');
+    Route::get('/publications/{publication}/export-markdown', [PublicationController::class, 'exportMarkdown']);
+    Route::post('/publications/{publication}/locks', [PublicationController::class, 'acquireLock'])->middleware('throttle:content-write');
+    Route::delete('/publications/{publication}/locks', [PublicationController::class, 'releaseLock']);
     Route::delete('/publications/{publication}', [PublicationController::class, 'destroy']);
 
     Route::get('/me/issues', [IssueQuestionController::class, 'myIndex']);

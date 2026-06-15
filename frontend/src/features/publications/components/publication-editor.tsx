@@ -23,6 +23,7 @@ import {
     Sparkles,
     Trash2,
     WandSparkles,
+    History,
     X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -49,7 +50,7 @@ import { getMySnippets } from "@/features/playground/api"
 import { ContentAttachmentsField } from "@/features/files/components/content-attachments-field"
 import { CodeSnippetPickerFields } from "@/features/playground/components/code-snippet-picker-fields"
 import type { CodeSnippet } from "@/features/playground/types"
-import { createPublication, deletePublication, updatePublication } from "@/features/publications/api"
+import { analyzePublicationQuality, autosavePublication, createDraftIfNotExists, createPublication, deletePublication, getPublicationVersions, restorePublicationVersion, updatePublication } from "@/features/publications/api"
 import { PublicationBlockRenderer } from "@/features/publications/components/publication-block-renderer"
 import { PublicationBreadcrumbs } from "@/features/publications/components/publication-breadcrumbs"
 import {
@@ -101,6 +102,8 @@ const blockTypes: PublicationBlockType[] = [
     "warning",
     "link",
     "divider",
+    "table",
+    "diagram",
 ]
 
 function createClientId() {
@@ -143,6 +146,10 @@ function defaultContentByType(type: PublicationBlockType): PublicationBlockConte
             return { text: "Предупреждение о возможной ошибке." }
         case "link":
             return { url: "", title: "Полезная ссылка", description: "Краткое описание ссылки." }
+        case "table":
+            return { rows: [["Колонка 1", "Колонка 2"], ["Значение", "Описание"]], header: true, alignment: ["left", "left"] }
+        case "diagram":
+            return { syntax: "mermaid", source: "flowchart TD\n  A[Идея] --> B[Редактор]\n  B --> C[Публикация]", caption: "Диаграмма процесса" }
         case "divider":
             return {}
     }
@@ -226,8 +233,13 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     const [commandOpen, setCommandOpen] = React.useState(false)
     const [publishDialogOpen, setPublishDialogOpen] = React.useState(false)
     const [templateDialogOpen, setTemplateDialogOpen] = React.useState(false)
-    const [saveState, setSaveState] = React.useState<"saved" | "saving" | "dirty" | "error">("saved")
-    const [lastSavedAt, setLastSavedAt] = React.useState<Date | null>(initialPublication?.updated_at ? new Date(initialPublication.updated_at) : null)
+    const [saveState, setSaveState] = React.useState<"saved" | "saving" | "dirty" | "error" | "conflict">("saved")
+    const [lastSavedAt, setLastSavedAt] = React.useState<Date | null>(initialPublication?.last_autosaved_at || initialPublication?.updated_at ? new Date(initialPublication.last_autosaved_at || initialPublication.updated_at!) : null)
+    const [autosaveId, setAutosaveId] = React.useState<number | null>(initialPublication?.id || null)
+    const [autosaveVersion, setAutosaveVersion] = React.useState(initialPublication?.autosave_version || 0)
+    const [qualityReport, setQualityReport] = React.useState<{ score: number; blockers: string[]; warnings: string[]; suggestions: string[] } | null>(null)
+    const [versionsOpen, setVersionsOpen] = React.useState(false)
+    const [versions, setVersions] = React.useState<Array<{ version_number: number; title: string; change_summary?: string | null; created_at?: string | null }>>([])
     const [activeBlockKey, setActiveBlockKey] = React.useState<string | null>(null)
 
     React.useEffect(() => {
@@ -236,7 +248,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
             .catch(() => null)
     }, [])
 
-    const isEditing = Boolean(initialPublication?.id)
+    const isEditing = Boolean(autosaveId)
     const estimatedReadingTime = React.useMemo(() => calculateEstimatedReadingTime(form.blocks), [form.blocks])
     const outline = React.useMemo(() => form.blocks.map((block, index) => ({ block, index })).filter(({ block }) => block.type === "heading" && getString(block.content?.text)), [form.blocks])
     const readinessItems = React.useMemo(() => buildReadiness(form, estimatedReadingTime), [form, estimatedReadingTime])
@@ -403,20 +415,26 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     }
 
     async function autosaveDraft() {
-        if (!isEditing || saveState !== "dirty" || !payload.title || pendingAction) return
+        if (saveState !== "dirty" || pendingAction) return
         setSaveState("saving")
         try {
-            await updatePublication(initialPublication!.id, { ...payload, status: "draft" })
+            const id = autosaveId || (await createDraftIfNotExists()).id
+            if (!autosaveId) setAutosaveId(id)
+            const result = await autosavePublication(id, { ...payload, title: payload.title || "Новый черновик", status: "draft", autosave_version: autosaveVersion, editor_state: { ...payload, saved_from: "publication-studio" } })
+            setAutosaveVersion(result.autosave_version)
             setSaveState("saved")
-            setLastSavedAt(new Date())
-        } catch {
-            setSaveState("error")
+            setLastSavedAt(new Date(result.last_autosaved_at))
+            window.localStorage.removeItem("publication-studio-draft")
+        } catch (error) {
+            const status = typeof error === "object" && error && "response" in error ? (error as { response?: { status?: number } }).response?.status : undefined
+            setSaveState(status === 409 ? "conflict" : "error")
+            window.localStorage.setItem("publication-studio-draft", JSON.stringify({ form, savedAt: new Date().toISOString() }))
         }
     }
 
     React.useEffect(() => {
         if (saveState !== "dirty") return
-        const timer = window.setTimeout(() => { void autosaveDraft() }, 2200)
+        const timer = window.setTimeout(() => { void autosaveDraft() }, 1700)
         return () => window.clearTimeout(timer)
     }, [saveState, payload])
 
@@ -452,8 +470,8 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
         setPendingAction(status === "published" ? "publish" : "draft")
 
         try {
-            const result = isEditing && initialPublication
-                ? await updatePublication(initialPublication.id, { ...payload, status })
+            const result = autosaveId
+                ? await updatePublication(autosaveId, { ...payload, title: payload.title || "Новый черновик", status })
                 : await createPublication({ ...payload, status })
 
             setSaveState("saved")
@@ -466,6 +484,8 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                 return
             }
 
+            setAutosaveId(result.id)
+            setAutosaveVersion(result.autosave_version || autosaveVersion)
             router.push(`/publications/editor/${result.id}`)
             router.refresh()
         } catch (error) {
@@ -590,6 +610,8 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                 <div className="flex flex-wrap gap-2">
                     <Button variant="outline" type="button" onClick={() => setCommandOpen(true)}><Sparkles className="size-4" />Команды</Button>
                     <Button variant="outline" type="button" onClick={() => setTemplateDialogOpen(true)}><LayoutTemplate className="size-4" />Шаблоны</Button>
+                    <Button variant="outline" type="button" onClick={async () => { if (autosaveId) { setVersions(await getPublicationVersions(autosaveId)); setVersionsOpen(true) } }}><History className="size-4" />История</Button>
+                    <Button variant="outline" type="button" onClick={async () => setQualityReport(await analyzePublicationQuality(payload))}><CheckCircle2 className="size-4" />Качество</Button>
                     <Button variant="outline" type="button" onClick={() => setMode("preview")}><Eye className="size-4" />Предпросмотр</Button>
                     <Button variant="outline" type="button" onClick={() => save("draft")} disabled={pendingAction !== null}>
                         {pendingAction === "draft" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -610,7 +632,10 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
 
             <EditorCommandPalette open={commandOpen} onOpenChange={setCommandOpen} onSave={() => save("draft")} onPublish={() => setPublishDialogOpen(true)} onMode={setMode} onAdd={addBlock} onRunAi={runAssistant} />
             <TemplateDialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen} onInsert={(blocks) => setForm((current) => ({ ...current, blocks: [...current.blocks, ...blocks.map((block, index) => ({ ...block, sort_order: current.blocks.length + index }))] }))} />
+            <VersionHistoryDialog open={versionsOpen} onOpenChange={setVersionsOpen} versions={versions} onRestore={async (version) => { if (!autosaveId) return; const restored = await restorePublicationVersion(autosaveId, version); setForm(createInitialState(restored)); toast.success("Версия восстановлена") }} />
             <PublishDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} form={form} readinessItems={readinessItems} onConfirm={() => save("published")} pending={pendingAction === "publish"} />
+
+            {qualityReport ? <QualityPanel report={qualityReport} /> : null}
 
             <Tabs value={mode} onValueChange={setMode} className="space-y-6">
                 <TabsList variant="line">
@@ -880,9 +905,9 @@ function EditorMain({ form, updateField, estimatedReadingTime, initialPublicatio
     )
 }
 
-function SaveStatus({ state, lastSavedAt }: { state: "saved" | "saving" | "dirty" | "error"; lastSavedAt: Date | null }) {
-    const map = { saved: "Сохранено", saving: "Сохраняем…", dirty: "Есть несохранённые изменения", error: "Ошибка сохранения" }
-    return <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-1", state === "error" && "border-destructive text-destructive", state === "dirty" && "border-amber-500/50 text-amber-500")}><CheckCircle2 className="size-3" />{map[state]}{state === "saved" && lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>
+function SaveStatus({ state, lastSavedAt }: { state: "saved" | "saving" | "dirty" | "error" | "conflict"; lastSavedAt: Date | null }) {
+    const map = { saved: "Сохранено", saving: "Сохраняем…", dirty: "Есть несохранённые изменения", error: "Ошибка сохранения", conflict: "Конфликт версии" }
+    return <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-1", (state === "error" || state === "conflict") && "border-destructive text-destructive", state === "dirty" && "border-amber-500/50 text-amber-500")}><CheckCircle2 className="size-3" />{map[state]}{state === "saved" && lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>
 }
 
 function buildReadiness(form: PublicationFormState, estimatedReadingTime: number) {
@@ -926,6 +951,15 @@ function TemplateDialog({ open, onOpenChange, onInsert }: { open: boolean; onOpe
     const templates = ["Статья", "Гайд", "Туториал", "Разбор ошибки", "DevOps runbook", "Laravel guide", "API documentation", "Q&A recap", "Сравнение технологий", "Чеклист"]
     function makeTemplate(name: string) { return [makeBlock("heading", 0), { ...makeBlock("paragraph", 1), content: { text: `Введение: ${name}` } }, { ...makeBlock("heading", 2), content: { text: "Пошаговый разбор", level: 2 } }, makeBlock("code", 3), { ...makeBlock("heading", 4), content: { text: "Вывод", level: 2 } }] }
     return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Шаблоны публикаций</DialogTitle><DialogDescription>Шаблон добавляется в конец статьи и не затирает текущий контент.</DialogDescription></DialogHeader><div className="grid gap-2 sm:grid-cols-2">{templates.map((name) => <Button key={name} variant="outline" onClick={() => { onInsert(makeTemplate(name)); onOpenChange(false); toast.success("Шаблон добавлен") }}>{name}</Button>)}</div></DialogContent></Dialog>
+}
+
+
+function QualityPanel({ report }: { report: { score: number; blockers: string[]; warnings: string[]; suggestions: string[] } }) {
+    return <Card className="border-primary/20"><CardHeader><CardTitle>Quality panel</CardTitle><CardDescription>Проверка готовности материала перед публикацией.</CardDescription></CardHeader><CardContent className="space-y-3"><Progress value={report.score} /><p className="text-sm font-medium">Score: {report.score}/100</p>{[["Blockers", report.blockers], ["Warnings", report.warnings], ["Suggestions", report.suggestions]].map(([title, items]) => <div key={title as string} className="space-y-1"><p className="text-xs font-semibold uppercase text-muted-foreground">{title as string}</p>{(items as string[]).length ? (items as string[]).map((item) => <p key={item} className="rounded-xl border bg-muted/30 px-3 py-2 text-sm">{item}</p>) : <p className="text-sm text-muted-foreground">Нет замечаний</p>}</div>)}</CardContent></Card>
+}
+
+function VersionHistoryDialog({ open, onOpenChange, versions, onRestore }: { open: boolean; onOpenChange: (open: boolean) => void; versions: Array<{ version_number: number; title: string; change_summary?: string | null; created_at?: string | null }>; onRestore: (version: number) => void }) {
+    return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>История изменений</DialogTitle><DialogDescription>Версии создаются при ручном сохранении и публикации. Текущая версия отмечена первой.</DialogDescription></DialogHeader><div className="space-y-2">{versions.length ? versions.map((version, index) => <div key={version.version_number} className="flex items-center justify-between rounded-2xl border p-3"><div><p className="font-medium">v{version.version_number} · {version.title} {index === 0 ? <Badge>Текущая версия</Badge> : null}</p><p className="text-xs text-muted-foreground">{version.change_summary || "Снимок публикации"} · {version.created_at ? new Date(version.created_at).toLocaleString("ru-RU") : ""}</p></div><Button variant="outline" size="sm" onClick={() => onRestore(version.version_number)}>Восстановить</Button></div>) : <p className="text-sm text-muted-foreground">Версий пока нет.</p>}</div></DialogContent></Dialog>
 }
 
 function PublishDialog({ open, onOpenChange, form, readinessItems, onConfirm, pending }: { open: boolean; onOpenChange: (open: boolean) => void; form: PublicationFormState; readinessItems: ReturnType<typeof buildReadiness>; onConfirm: () => void; pending: boolean }) {

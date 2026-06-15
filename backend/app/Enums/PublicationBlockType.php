@@ -20,6 +20,8 @@ enum PublicationBlockType: string
     case Warning = 'warning';
     case Link = 'link';
     case Divider = 'divider';
+    case Table = 'table';
+    case Diagram = 'diagram';
 
     public function label(): string
     {
@@ -40,6 +42,8 @@ enum PublicationBlockType: string
             self::Warning => 'Предупреждение',
             self::Link => 'Ссылка',
             self::Divider => 'Разделитель',
+            self::Table => 'Таблица',
+            self::Diagram => 'Диаграмма',
         };
     }
 
