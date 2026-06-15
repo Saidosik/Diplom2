@@ -6,8 +6,25 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
-#[Fillable(['user_id','pinnable_type','pinnable_id','position'])]
+#[Fillable(['user_id','pinnable_type','pinnable_id','title_override','description_override','position','visibility'])]
 class PinnedItem extends Model
 {
-    public function pinnable(): MorphTo { return $this->morphTo(); }
+    protected function casts(): array
+    {
+        return [
+            'position' => 'integer',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
+
+    public function pinnable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function isPublic(): bool
+    {
+        return ($this->visibility ?? 'public') === 'public';
+    }
 }
