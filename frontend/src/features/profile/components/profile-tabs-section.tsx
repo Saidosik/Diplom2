@@ -1,78 +1,60 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { Settings } from "lucide-react"
-
 import type { User } from "@/features/auth/types"
-import { ProfileOverviewTab } from "@/features/profile/components/profile-overview-tab"
-import { ProfileSavedTab } from "@/features/profile/components/profile-saved-tab"
-import { ProfileActivityPanel } from "@/features/profile/components/profile-activity-panel"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { Publication } from "@/features/publications/types"
+import type { IssueAnswer, IssueQuestion } from "@/features/issues/types"
+import type { CommentItem, SavedItem } from "@/features/interactions/types"
+import { getProfileComments, getProfileIssueAnswers, getProfileIssueQuestions, getProfilePublications } from "@/features/profile/api"
+import { getSavedItems } from "@/features/interactions/api"
+import { ProfileCommunityDashboard } from "@/features/profile/components/profile-community-dashboard"
 
-type ProfileTabsSectionProps = {
-    user: User
-}
+export function ProfileTabsSection({ user }: { user: User }) {
+  const [publications, setPublications] = React.useState<Publication[]>([])
+  const [questions, setQuestions] = React.useState<IssueQuestion[]>([])
+  const [answers, setAnswers] = React.useState<IssueAnswer[]>([])
+  const [comments, setComments] = React.useState<CommentItem[]>([])
+  const [savedItems, setSavedItems] = React.useState<SavedItem[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-const allowedProfileTabs = ["overview", "activity", "saved"] as const
-
-type ProfileTab = (typeof allowedProfileTabs)[number]
-
-function isProfileTab(value: string | null): value is ProfileTab {
-    return allowedProfileTabs.includes(value as ProfileTab)
-}
-
-export function ProfileTabsSection({ user }: ProfileTabsSectionProps) {
-    const searchParams = useSearchParams()
-    const tabFromUrl = searchParams.get("tab")
-    const [activeTab, setActiveTab] = React.useState<ProfileTab>(
-        isProfileTab(tabFromUrl) ? tabFromUrl : "overview"
-    )
-
-    React.useEffect(() => {
-        if (isProfileTab(tabFromUrl)) {
-            setActiveTab(tabFromUrl)
+  React.useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const [pubs, qs, ans, comms, saved] = await Promise.all([
+          getProfilePublications({ per_page: 12 }),
+          getProfileIssueQuestions({ per_page: 12 }),
+          getProfileIssueAnswers({ per_page: 12 }),
+          getProfileComments({ per_page: 12 }),
+          getSavedItems({ per_page: 24 }),
+        ])
+        if (!cancelled) {
+          setPublications(pubs.data || [])
+          setQuestions(qs.data || [])
+          setAnswers(ans.data || [])
+          setComments(comms.data || [])
+          setSavedItems((saved.data || []).filter((item) => Boolean(item.item)))
         }
-    }, [tabFromUrl])
+      } catch (error) {
+        console.log("[PROFILE_DASHBOARD_LOAD_ERROR]", error)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [])
 
-    return (
-        <div className="space-y-4">
-            <div className="flex flex-col gap-3 border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                    <p className="text-sm font-medium">Настройки вынесены отдельно</p>
-                    <p className="text-xs text-muted-foreground">
-                        Данные профиля, тема интерфейса и inbox теперь находятся в отдельном разделе настроек пользователя.
-                    </p>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                    <Link href="/settings">
-                        <Settings className="size-4" />
-                        Открыть настройки
-                    </Link>
-                </Button>
-            </div>
+  const stats = {
+    reputation: user.reputation_score || 0,
+    publications: publications.length,
+    questions: questions.length,
+    answers: answers.length,
+    comments: comments.length,
+    likes: publications.reduce((sum, item) => sum + (item.likes_count || 0), 0) + questions.reduce((sum, item) => sum + (item.likes_count || 0), 0),
+    saved: savedItems.length,
+  }
 
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ProfileTab)} className="space-y-6">
-                <TabsList variant="line">
-                    <TabsTrigger value="overview">Обзор</TabsTrigger>
-                    <TabsTrigger value="activity">Активность</TabsTrigger>
-                    <TabsTrigger value="saved">Сохранённое</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                    <ProfileOverviewTab user={user} />
-                </TabsContent>
-
-                <TabsContent value="activity">
-                    <ProfileActivityPanel />
-                </TabsContent>
-
-                <TabsContent value="saved">
-                    <ProfileSavedTab />
-                </TabsContent>
-            </Tabs>
-        </div>
-    )
+  return <ProfileCommunityDashboard isOwnProfile user={user} stats={stats} publications={publications} questions={questions} answers={answers} comments={comments} savedItems={savedItems} loading={loading} />
 }
