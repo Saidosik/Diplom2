@@ -3,7 +3,8 @@ import { isAxiosError } from "axios"
 
 import { getAccessTokenCookie } from "@/lib/auth/cookies"
 import createLaravelApi from "@/lib/http/laravel"
-import type { PopularPublicationPeriod, PopularPublicationsResponse } from "@/features/publications/types"
+import { normalizePublicationsResponse } from "@/features/community/lib/response-normalizers"
+import type { PopularPublicationPeriod } from "@/features/publications/types"
 
 const periods: PopularPublicationPeriod[] = ["day", "week", "month", "all"]
 const DEFAULT_PERIOD: PopularPublicationPeriod = "week"
@@ -33,9 +34,10 @@ export async function GET(request: NextRequest) {
 
         try {
             const api = createLaravelApi(token)
-            const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", { params })
+            const response = await api.get<unknown>("/community/popular-publications", { params })
+            const payload = normalizePublicationsResponse(response.data, period)
 
-            return NextResponse.json(response.data, {
+            return NextResponse.json(payload, {
                 headers: token
                     ? { "Cache-Control": "private, no-store" }
                     : {
@@ -45,9 +47,10 @@ export async function GET(request: NextRequest) {
         } catch (error) {
             if (token && isAxiosError(error) && AUTH_ERROR_STATUSES.has(error.response?.status ?? 0)) {
                 const publicApi = createLaravelApi()
-                const response = await publicApi.get<PopularPublicationsResponse>("/community/popular-publications", { params })
+                const response = await publicApi.get<unknown>("/community/popular-publications", { params })
+                const payload = normalizePublicationsResponse(response.data, period)
 
-                return NextResponse.json(response.data, {
+                return NextResponse.json(payload, {
                     headers: { "Cache-Control": "private, no-store" },
                 })
             }
