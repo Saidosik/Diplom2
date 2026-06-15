@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation"
 import {
     ArrowDown,
     ArrowUp,
+    CheckCircle2,
+    Copy,
+    FileUp,
+    Hash,
     Eye,
     Clock3,
     FileText,
@@ -19,19 +23,28 @@ import {
     Sparkles,
     Trash2,
     WandSparkles,
+    X,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { assistPublication, type PublicationAssistResponse, type SourceSuggestion } from "@/features/ai-api"
+import { uploadMyFile } from "@/features/files/api"
 import { getMySnippets } from "@/features/playground/api"
 import { ContentAttachmentsField } from "@/features/files/components/content-attachments-field"
 import { CodeSnippetPickerFields } from "@/features/playground/components/code-snippet-picker-fields"
@@ -65,7 +78,8 @@ type PublicationFormState = {
     excerpt: string
     cover_image_path: string
     reading_time_minutes: string
-    tags: string
+    tags: string[]
+    tagDraft: string
     attachmentIds: number[]
     blocks: PublicationBlock[]
 }
@@ -172,7 +186,8 @@ function createInitialState(publication?: Publication | null): PublicationFormSt
         excerpt: publication?.excerpt || "",
         cover_image_path: publication?.cover_image_path || publication?.cover_image_url || "",
         reading_time_minutes: publication?.reading_time_minutes ? String(publication.reading_time_minutes) : "",
-        tags: (publication?.tags || []).map((tag) => tag.name).join(", "),
+        tags: (publication?.tags || []).map((tag) => tag.name),
+        tagDraft: "",
         attachmentIds: (publication?.attachments || []).map((attachment) => attachment.user_file_id),
         blocks: normalizeBlocks(publication?.blocks),
     }
@@ -207,6 +222,13 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     const [assistantPending, setAssistantPending] = React.useState(false)
     const [assistantResult, setAssistantResult] = React.useState<PublicationAssistResponse | null>(null)
     const [codeSnippets, setCodeSnippets] = React.useState<CodeSnippet[]>([])
+    const [mode, setMode] = React.useState("editor")
+    const [commandOpen, setCommandOpen] = React.useState(false)
+    const [publishDialogOpen, setPublishDialogOpen] = React.useState(false)
+    const [templateDialogOpen, setTemplateDialogOpen] = React.useState(false)
+    const [saveState, setSaveState] = React.useState<"saved" | "saving" | "dirty" | "error">("saved")
+    const [lastSavedAt, setLastSavedAt] = React.useState<Date | null>(initialPublication?.updated_at ? new Date(initialPublication.updated_at) : null)
+    const [activeBlockKey, setActiveBlockKey] = React.useState<string | null>(null)
 
     React.useEffect(() => {
         getMySnippets()
@@ -216,6 +238,9 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
 
     const isEditing = Boolean(initialPublication?.id)
     const estimatedReadingTime = React.useMemo(() => calculateEstimatedReadingTime(form.blocks), [form.blocks])
+    const outline = React.useMemo(() => form.blocks.map((block, index) => ({ block, index })).filter(({ block }) => block.type === "heading" && getString(block.content?.text)), [form.blocks])
+    const readinessItems = React.useMemo(() => buildReadiness(form, estimatedReadingTime), [form, estimatedReadingTime])
+    const readinessPercent = Math.round((readinessItems.filter((item) => item.done).length / readinessItems.length) * 100)
 
     const payload = React.useMemo<PublicationPayload>(() => ({
         type: form.type,
@@ -224,10 +249,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
         excerpt: form.excerpt.trim() || null,
         cover_image_path: form.cover_image_path.trim() || null,
         reading_time_minutes: form.reading_time_minutes.trim() ? Number(form.reading_time_minutes) : null,
-        tags: form.tags
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean),
+        tags: form.tags,
         attachment_ids: form.attachmentIds,
         blocks: form.blocks.map((block, index) => ({
             type: block.type,
@@ -236,11 +258,28 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
         })),
     }), [form])
 
+    function markDirty() {
+        setSaveState((current) => current === "saving" ? current : "dirty")
+    }
+
     function updateField<Key extends keyof PublicationFormState>(field: Key, value: PublicationFormState[Key]) {
+        markDirty()
         setForm((current) => ({ ...current, [field]: value }))
     }
 
+    function addTag(tag: string) {
+        const clean = tag.trim().replace(/^#/, "")
+        if (!clean) return
+        updateField("tags", Array.from(new Set([...form.tags, clean])).slice(0, 12))
+        updateField("tagDraft", "")
+    }
+
+    function removeTag(tag: string) {
+        updateField("tags", form.tags.filter((item) => item !== tag))
+    }
+
     function addBlock(type: PublicationBlockType) {
+        markDirty()
         setForm((current) => ({
             ...current,
             blocks: [...current.blocks, makeBlock(type, current.blocks.length)],
@@ -248,6 +287,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     }
 
     function updateBlock(index: number, patch: Partial<PublicationBlock>) {
+        markDirty()
         setForm((current) => ({
             ...current,
             blocks: current.blocks.map((block, blockIndex) => {
@@ -258,6 +298,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     }
 
     function updateBlockContent(index: number, key: string, value: unknown) {
+        markDirty()
         setForm((current) => ({
             ...current,
             blocks: current.blocks.map((block, blockIndex) => {
@@ -280,7 +321,20 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
         })
     }
 
+    function duplicateBlock(index: number) {
+        markDirty()
+        setForm((current) => ({
+            ...current,
+            blocks: [
+                ...current.blocks.slice(0, index + 1),
+                { ...current.blocks[index], id: undefined, client_id: createClientId() },
+                ...current.blocks.slice(index + 1),
+            ],
+        }))
+    }
+
     function removeBlock(index: number) {
+        markDirty()
         setForm((current) => {
             if (current.blocks.length <= 1) {
                 toast.error("В публикации должен остаться хотя бы один блок")
@@ -295,6 +349,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
     }
 
     function moveBlock(index: number, direction: -1 | 1) {
+        markDirty()
         setForm((current) => {
             const nextIndex = index + direction
             if (nextIndex < 0 || nextIndex >= current.blocks.length) return current
@@ -347,6 +402,47 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
         setDraggedBlockKey(null)
     }
 
+    async function autosaveDraft() {
+        if (!isEditing || saveState !== "dirty" || !payload.title || pendingAction) return
+        setSaveState("saving")
+        try {
+            await updatePublication(initialPublication!.id, { ...payload, status: "draft" })
+            setSaveState("saved")
+            setLastSavedAt(new Date())
+        } catch {
+            setSaveState("error")
+        }
+    }
+
+    React.useEffect(() => {
+        if (saveState !== "dirty") return
+        const timer = window.setTimeout(() => { void autosaveDraft() }, 2200)
+        return () => window.clearTimeout(timer)
+    }, [saveState, payload])
+
+    React.useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (saveState === "dirty" || saveState === "error") {
+                event.preventDefault()
+                event.returnValue = ""
+            }
+        }
+        window.addEventListener("beforeunload", handleBeforeUnload)
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+    }, [saveState])
+
+    React.useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            const mod = event.ctrlKey || event.metaKey
+            if (!mod) return
+            if (event.key.toLowerCase() === "s") { event.preventDefault(); void save("draft") }
+            if (event.key === "/") { event.preventDefault(); setCommandOpen(true) }
+            if (event.key === "Enter") { event.preventDefault(); setPublishDialogOpen(true) }
+        }
+        window.addEventListener("keydown", onKeyDown)
+        return () => window.removeEventListener("keydown", onKeyDown)
+    }, [payload])
+
     async function save(status: PublicationStatus) {
         if (!payload.title) {
             toast.error("Введите заголовок публикации")
@@ -360,6 +456,8 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                 ? await updatePublication(initialPublication.id, { ...payload, status })
                 : await createPublication({ ...payload, status })
 
+            setSaveState("saved")
+            setLastSavedAt(new Date())
             toast.success(status === "published" ? "Публикация опубликована" : "Черновик сохранён")
 
             if (status === "published") {
@@ -372,6 +470,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
             router.refresh()
         } catch (error) {
             const message = error instanceof Error ? error.message : "Не удалось сохранить публикацию"
+            setSaveState("error")
             toast.error(message)
         } finally {
             setPendingAction(null)
@@ -480,17 +579,23 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                     <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
                         {isEditing ? "Редактирование публикации" : "Новая публикация"}
                     </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Собери материал из блоков: текст, код, терминал, diff, дерево файлов, изображения, ссылки и callout-блоки.
-                    </p>
+                    <p className="text-sm text-muted-foreground">Конструктор технических материалов с блоками, файлами, сниппетами, AI-подсказками и live preview.</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant={form.status === "published" ? "default" : "secondary"}>{publicationStatusLabels[form.status]}</Badge>
+                        <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+                        {initialPublication?.updated_at ? <span>Изменено: {new Date(initialPublication.updated_at).toLocaleString("ru-RU")}</span> : null}
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" type="button" onClick={() => setCommandOpen(true)}><Sparkles className="size-4" />Команды</Button>
+                    <Button variant="outline" type="button" onClick={() => setTemplateDialogOpen(true)}><LayoutTemplate className="size-4" />Шаблоны</Button>
+                    <Button variant="outline" type="button" onClick={() => setMode("preview")}><Eye className="size-4" />Предпросмотр</Button>
                     <Button variant="outline" type="button" onClick={() => save("draft")} disabled={pendingAction !== null}>
                         {pendingAction === "draft" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         Сохранить черновик
                     </Button>
-                    <Button type="button" onClick={() => save("published")} disabled={pendingAction !== null}>
+                    <Button type="button" onClick={() => setPublishDialogOpen(true)} disabled={pendingAction !== null}>
                         {pendingAction === "publish" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                         Опубликовать
                     </Button>
@@ -503,12 +608,17 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                 </div>
             </section>
 
-            <Tabs defaultValue="editor" className="space-y-6">
+            <EditorCommandPalette open={commandOpen} onOpenChange={setCommandOpen} onSave={() => save("draft")} onPublish={() => setPublishDialogOpen(true)} onMode={setMode} onAdd={addBlock} onRunAi={runAssistant} />
+            <TemplateDialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen} onInsert={(blocks) => setForm((current) => ({ ...current, blocks: [...current.blocks, ...blocks.map((block, index) => ({ ...block, sort_order: current.blocks.length + index }))] }))} />
+            <PublishDialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen} form={form} readinessItems={readinessItems} onConfirm={() => save("published")} pending={pendingAction === "publish"} />
+
+            <Tabs value={mode} onValueChange={setMode} className="space-y-6">
                 <TabsList variant="line">
                     <TabsTrigger value="editor">
                         <LayoutTemplate className="size-4" />
                         Редактор
                     </TabsTrigger>
+                    <TabsTrigger value="split"><LayoutTemplate className="size-4" />Сплит</TabsTrigger>
                     <TabsTrigger value="preview">
                         <Eye className="size-4" />
                         Предпросмотр
@@ -585,15 +695,29 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
 
                                     <div className="space-y-2 md:col-span-2">
                                         <Label htmlFor="publication-tags">Теги</Label>
-                                        <Input
-                                            id="publication-tags"
-                                            value={form.tags}
-                                            onChange={(event) => updateField("tags", event.target.value)}
-                                            placeholder="Laravel, API, PostgreSQL, Next.js"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Указывай через запятую. Теги помогут находить публикации в ленте.
-                                        </p>
+                                        <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+                                            {form.tags.map((tag) => (
+                                                <Badge key={tag} variant="secondary" className="gap-1">
+                                                    <Hash className="size-3" />{tag}
+                                                    <button type="button" aria-label={`Удалить тег ${tag}`} onClick={() => removeTag(tag)}><X className="size-3" /></button>
+                                                </Badge>
+                                            ))}
+                                            <input
+                                                id="publication-tags"
+                                                value={form.tagDraft}
+                                                onChange={(event) => updateField("tagDraft", event.target.value)}
+                                                onKeyDown={(event) => {
+                                                    if (["Enter", ","].includes(event.key)) {
+                                                        event.preventDefault()
+                                                        addTag(form.tagDraft)
+                                                    }
+                                                }}
+                                                onBlur={() => addTag(form.tagDraft)}
+                                                className="min-w-40 flex-1 bg-transparent text-sm outline-none"
+                                                placeholder={form.tags.length ? "Добавить тег" : "Laravel, API, PostgreSQL"}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">Enter или запятая добавляют тег. Минимум два тега повышают готовность публикации.</p>
                                     </div>
 
                                     <div className="space-y-2 md:col-span-2">
@@ -609,12 +733,7 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
 
                                     <div className="space-y-2 md:col-span-2">
                                         <Label htmlFor="publication-cover">Обложка</Label>
-                                        <Input
-                                            id="publication-cover"
-                                            value={form.cover_image_path}
-                                            onChange={(event) => updateField("cover_image_path", event.target.value)}
-                                            placeholder="URL изображения или путь в storage"
-                                        />
+                                        <CoverField value={form.cover_image_path} onChange={(value) => updateField("cover_image_path", value)} />
                                     </div>
 
                                     <div className="md:col-span-2">
@@ -660,6 +779,9 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                                             onMoveUp={() => moveBlock(index, -1)}
                                             onMoveDown={() => moveBlock(index, 1)}
                                             onRemove={() => removeBlock(index)}
+                                            onDuplicate={() => duplicateBlock(index)}
+                                            active={activeBlockKey === getBlockKey(block)}
+                                            onActivate={() => setActiveBlockKey(getBlockKey(block))}
                                         />
                                     ))}
                                 </CardContent>
@@ -687,9 +809,26 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4 text-sm">
+                                    <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
+                                        <div className="flex items-center justify-between"><span className="font-medium">Готовность</span><span>{readinessPercent}%</span></div>
+                                        <Progress value={readinessPercent} />
+                                        <div className="grid gap-1">
+                                            {readinessItems.slice(0, 5).map((item) => (
+                                                <span key={item.label} className="inline-flex items-center gap-2 text-xs"><CheckCircle2 className={cn("size-3", item.done ? "text-primary" : "text-muted-foreground")} />{item.label}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
+                                        <p className="font-medium">Структура</p>
+                                        {outline.length ? outline.map(({ block, index }) => (
+                                            <button key={getBlockKey(block)} type="button" className="block w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-muted" onClick={() => document.getElementById(`publication-block-${index}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                                                H{getNumber(block.content?.level, 2)} · {getString(block.content?.text)}
+                                            </button>
+                                        )) : <p className="text-xs text-muted-foreground">Добавьте заголовки, чтобы появилась структура.</p>}
+                                    </div>
                                     <SummaryRow label="Название" value={form.title || "Не заполнено"} />
                                     <SummaryRow label="Тип" value={publicationTypeLabels[form.type]} />
-                                    <SummaryRow label="Теги" value={form.tags || "Не указаны"} />
+                                    <SummaryRow label="Теги" value={form.tags.join(", ") || "Не указаны"} />
                                     <SummaryRow label="Статус" value={publicationStatusLabels[form.status]} />
                                     <SummaryRow label="Блоков" value={String(form.blocks.length)} />
                                     <SummaryRow label="Вложений" value={String(form.attachmentIds.length)} />
@@ -711,12 +850,87 @@ export function PublicationEditor({ initialPublication }: PublicationEditorProps
                     </div>
                 </TabsContent>
 
+                <TabsContent value="split">
+                    <ResizablePanelGroup orientation="horizontal" className="min-h-[760px] rounded-3xl border bg-card">
+                        <ResizablePanel defaultSize={52} minSize={35}><ScrollArea className="h-[760px] p-4"><EditorMain form={form} updateField={updateField} estimatedReadingTime={estimatedReadingTime} initialPublication={initialPublication} addBlock={addBlock} blocks={form.blocks.map((block, index) => ({ block, index }))} renderBlock={(block, index) => (<BlockEditorCard key={block.client_id || `${block.type}-${index}`} block={block} index={index} total={form.blocks.length} onTypeChange={(type) => changeBlockType(index, type)} onContentChange={(key, value) => updateBlockContent(index, key, value)} codeSnippets={codeSnippets} isDragging={draggedBlockKey === getBlockKey(block)} onDragStart={(event) => handleBlockDragStart(index, event)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleBlockDrop(index, event)} onDragEnd={() => setDraggedBlockKey(null)} onMoveUp={() => moveBlock(index, -1)} onMoveDown={() => moveBlock(index, 1)} onRemove={() => removeBlock(index)} onDuplicate={() => duplicateBlock(index)} active={activeBlockKey === getBlockKey(block)} onActivate={() => setActiveBlockKey(getBlockKey(block))} />)} /></ScrollArea></ResizablePanel>
+                        <ResizableHandle withHandle />
+                        <ResizablePanel defaultSize={48} minSize={30}><ScrollArea className="h-[760px] bg-muted/20 p-4"><PublicationPreview form={form} /></ScrollArea></ResizablePanel>
+                    </ResizablePanelGroup>
+                </TabsContent>
+
                 <TabsContent value="preview">
                     <PublicationPreview form={form} />
                 </TabsContent>
             </Tabs>
         </div>
     )
+}
+
+function EditorMain({ form, updateField, estimatedReadingTime, initialPublication, addBlock, blocks, renderBlock }: { form: PublicationFormState; updateField: <Key extends keyof PublicationFormState>(field: Key, value: PublicationFormState[Key]) => void; estimatedReadingTime: number; initialPublication?: Publication | null; addBlock: (type: PublicationBlockType) => void; blocks: Array<{ block: PublicationBlock; index: number }>; renderBlock: (block: PublicationBlock, index: number) => React.ReactNode }) {
+    return (
+        <div className="space-y-4">
+            <Card><CardHeader><CardTitle>Редактор</CardTitle><CardDescription>Сплит-режим: слева блоки, справа live preview.</CardDescription></CardHeader><CardContent className="space-y-4">
+                <Field label="Заголовок"><Input value={form.title} onChange={(event) => updateField("title", event.target.value)} /></Field>
+                <Field label="Описание"><Textarea value={form.excerpt} onChange={(event) => updateField("excerpt", event.target.value)} className="min-h-20" /></Field>
+                <div className="grid gap-3 md:grid-cols-2"><Field label="Время чтения"><Input value={form.reading_time_minutes} onChange={(event) => updateField("reading_time_minutes", event.target.value)} placeholder={String(estimatedReadingTime)} /></Field><div className="pt-7"><ContentAttachmentsField value={form.attachmentIds} onChange={(ids) => updateField("attachmentIds", ids)} initialAttachments={initialPublication?.attachments || []} /></div></div>
+            </CardContent></Card>
+            <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => addBlock("paragraph")}>+ Текст</Button><Button size="sm" variant="outline" onClick={() => addBlock("code")}>+ Код</Button><Button size="sm" variant="outline" onClick={() => addBlock("image")}>+ Изображение</Button><Button size="sm" variant="outline" onClick={() => addBlock("callout")}>+ Callout</Button></div>
+            {blocks.map(({ block, index }) => renderBlock(block, index))}
+        </div>
+    )
+}
+
+function SaveStatus({ state, lastSavedAt }: { state: "saved" | "saving" | "dirty" | "error"; lastSavedAt: Date | null }) {
+    const map = { saved: "Сохранено", saving: "Сохраняем…", dirty: "Есть несохранённые изменения", error: "Ошибка сохранения" }
+    return <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-1", state === "error" && "border-destructive text-destructive", state === "dirty" && "border-amber-500/50 text-amber-500")}><CheckCircle2 className="size-3" />{map[state]}{state === "saved" && lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>
+}
+
+function buildReadiness(form: PublicationFormState, estimatedReadingTime: number) {
+    const textBlocks = form.blocks.filter((block) => ["paragraph", "markdown", "important", "quote", "warning"].includes(block.type) && getString(block.content?.text).trim())
+    return [
+        { label: "Заголовок заполнен", done: form.title.trim().length >= 5, critical: true },
+        { label: "Описание заполнено", done: form.excerpt.trim().length >= 40, critical: false },
+        { label: "Есть минимум 2 тега", done: form.tags.length >= 2, critical: false },
+        { label: "Есть основной текст", done: textBlocks.length > 0, critical: true },
+        { label: "Есть структура/заголовки", done: form.blocks.some((block) => block.type === "heading"), critical: false },
+        { label: "Есть вывод", done: form.blocks.some((block) => getString(block.content?.text).toLowerCase().includes("вывод")), critical: false },
+        { label: "Время чтения рассчитано", done: Boolean(form.reading_time_minutes) || estimatedReadingTime > 0, critical: false },
+        { label: "Нет пустых блоков", done: form.blocks.every((block) => block.type === "divider" || Object.values(block.content || {}).some((value) => String(value ?? "").trim())), critical: true },
+    ]
+}
+
+function CoverField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+    const [pending, setPending] = React.useState(false)
+    const inputRef = React.useRef<HTMLInputElement | null>(null)
+    async function upload(file?: File) {
+        if (!file) return
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { toast.error("Поддерживаются jpg, png и webp"); return }
+        setPending(true)
+        try { const uploaded = await uploadMyFile({ file, visibility: "public" }); onChange(uploaded.public_url || uploaded.download_url || uploaded.preview_url || ""); toast.success("Обложка загружена") }
+        catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось загрузить обложку") }
+        finally { setPending(false); if (inputRef.current) inputRef.current.value = "" }
+    }
+    return <div className="space-y-3"><div className="rounded-2xl border border-dashed bg-muted/20 p-4 text-center" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void upload(e.dataTransfer.files?.[0]) }}>
+        {value ? <img src={value} alt="Превью обложки" className="mx-auto max-h-52 rounded-xl object-cover" /> : <div className="py-6 text-sm text-muted-foreground"><ImageIcon className="mx-auto mb-2 size-8" />Перетащите изображение или укажите URL. Рекомендуемый размер 1600×900.</div>}
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+        <div className="mt-3 flex flex-wrap justify-center gap-2"><Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}Загрузить обложку</Button>{value ? <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>Удалить</Button> : null}</div>
+    </div><Input value={value} onChange={(event) => onChange(event.target.value)} placeholder="URL изображения или путь в storage" /></div>
+}
+
+function EditorCommandPalette({ open, onOpenChange, onSave, onPublish, onMode, onAdd, onRunAi }: { open: boolean; onOpenChange: (open: boolean) => void; onSave: () => void; onPublish: () => void; onMode: (mode: string) => void; onAdd: (type: PublicationBlockType) => void; onRunAi: () => void }) {
+    const run = (fn: () => void) => { fn(); onOpenChange(false) }
+    return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Командная палитра</DialogTitle><DialogDescription>Ctrl+/ открывает быстрые действия редактора.</DialogDescription></DialogHeader><Command><CommandInput placeholder="Сохранить, блок, AI..." /><CommandList><CommandEmpty>Команды не найдены</CommandEmpty><CommandGroup heading="Действия"><CommandItem onSelect={() => run(onSave)}>Сохранить черновик</CommandItem><CommandItem onSelect={() => run(onPublish)}>Опубликовать</CommandItem><CommandItem onSelect={() => run(() => onMode("preview"))}>Открыть предпросмотр</CommandItem><CommandItem onSelect={() => run(() => onMode("split"))}>Переключить split view</CommandItem><CommandItem onSelect={() => run(onRunAi)}>Запустить AI-анализ</CommandItem></CommandGroup><CommandSeparator /><CommandGroup heading="Добавить блок">{blockTypes.map((type) => <CommandItem key={type} onSelect={() => run(() => onAdd(type))}>{publicationBlockTypeLabels[type]}</CommandItem>)}</CommandGroup></CommandList></Command></DialogContent></Dialog>
+}
+
+function TemplateDialog({ open, onOpenChange, onInsert }: { open: boolean; onOpenChange: (open: boolean) => void; onInsert: (blocks: PublicationBlock[]) => void }) {
+    const templates = ["Статья", "Гайд", "Туториал", "Разбор ошибки", "DevOps runbook", "Laravel guide", "API documentation", "Q&A recap", "Сравнение технологий", "Чеклист"]
+    function makeTemplate(name: string) { return [makeBlock("heading", 0), { ...makeBlock("paragraph", 1), content: { text: `Введение: ${name}` } }, { ...makeBlock("heading", 2), content: { text: "Пошаговый разбор", level: 2 } }, makeBlock("code", 3), { ...makeBlock("heading", 4), content: { text: "Вывод", level: 2 } }] }
+    return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Шаблоны публикаций</DialogTitle><DialogDescription>Шаблон добавляется в конец статьи и не затирает текущий контент.</DialogDescription></DialogHeader><div className="grid gap-2 sm:grid-cols-2">{templates.map((name) => <Button key={name} variant="outline" onClick={() => { onInsert(makeTemplate(name)); onOpenChange(false); toast.success("Шаблон добавлен") }}>{name}</Button>)}</div></DialogContent></Dialog>
+}
+
+function PublishDialog({ open, onOpenChange, form, readinessItems, onConfirm, pending }: { open: boolean; onOpenChange: (open: boolean) => void; form: PublicationFormState; readinessItems: ReturnType<typeof buildReadiness>; onConfirm: () => void; pending: boolean }) {
+    const blockers = readinessItems.filter((item) => item.critical && !item.done)
+    return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Публикация материала</DialogTitle><DialogDescription>Проверьте сводку перед публикацией.</DialogDescription></DialogHeader><div className="space-y-3 text-sm"><SummaryRow label="Название" value={form.title || "Не заполнено"} /><SummaryRow label="Теги" value={form.tags.join(", ") || "Нет"} /><SummaryRow label="Блоков" value={String(form.blocks.length)} />{readinessItems.map((item) => <div key={item.label} className="flex items-center gap-2"><Checkbox checked={item.done} disabled /><span className={cn(!item.done && item.critical && "text-destructive")}>{item.label}</span></div>)}</div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button><Button onClick={onConfirm} disabled={pending || blockers.length > 0}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}Опубликовать</Button></DialogFooter></DialogContent></Dialog>
 }
 
 function PublicationAssistantCard({
@@ -757,7 +971,7 @@ function PublicationAssistantCard({
                             <p className="font-medium">Применить рекомендации</p>
                             <Button type="button" variant="outline" size="sm" onClick={() => onApply({ title: result.suggested_title })}>Заголовок</Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => onApply({ excerpt: result.suggested_excerpt })}>Описание</Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => onApply({ tags: result.suggested_tags.join(", ") })}>Теги</Button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => onApply({ tags: result.suggested_tags })}>Теги</Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => onAddOutline(result.outline)}>Добавить план блоками</Button>
                             <Button type="button" variant="outline" size="sm" onClick={() => onAddSources(result.source_suggestions || [])}>Добавить источники</Button>
                         </div>
@@ -815,6 +1029,9 @@ function BlockEditorCard({
     onMoveUp,
     onMoveDown,
     onRemove,
+    onDuplicate,
+    active,
+    onActivate,
     isDragging,
     onDragStart,
     onDragOver,
@@ -830,6 +1047,9 @@ function BlockEditorCard({
     onMoveUp: () => void
     onMoveDown: () => void
     onRemove: () => void
+    onDuplicate: () => void
+    active: boolean
+    onActivate: () => void
     isDragging: boolean
     onDragStart: (event: React.DragEvent<HTMLElement>) => void
     onDragOver: (event: React.DragEvent<HTMLElement>) => void
@@ -840,8 +1060,11 @@ function BlockEditorCard({
         <div
             className={cn(
                 "rounded-3xl border bg-background/40 p-4 transition-all",
-                isDragging && "scale-[0.99] border-primary/60 opacity-60 shadow-lg"
+                isDragging && "scale-[0.99] border-primary/60 opacity-60 shadow-lg",
+                active && "border-primary/70 shadow-md"
             )}
+            id={`publication-block-${index}`}
+            onClick={onActivate}
             onDragOver={onDragOver}
             onDrop={onDrop}
         >
@@ -880,7 +1103,10 @@ function BlockEditorCard({
                     <Button variant="outline" size="icon-sm" type="button" onClick={onMoveDown} disabled={index === total - 1}>
                         <ArrowDown className="size-4" />
                     </Button>
-                    <Button variant="destructive" size="icon-sm" type="button" onClick={onRemove}>
+                    <Button variant="outline" size="icon-sm" type="button" onClick={onDuplicate} aria-label="Дублировать блок">
+                        <Copy className="size-4" />
+                    </Button>
+                    <Button variant="destructive" size="icon-sm" type="button" onClick={onRemove} aria-label="Удалить блок">
                         <Trash2 className="size-4" />
                     </Button>
                 </div>
@@ -1108,7 +1334,7 @@ function PublicationPreview({ form }: { form: PublicationFormState }) {
                             <ImageIcon className="size-3.5" />
                             {publicationTypeLabels[form.type]}
                         </div>
-                        {form.tags.split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                        {form.tags.map((tag) => (
                             <span key={tag} className="rounded-full border px-3 py-1 text-xs text-muted-foreground">
                                 {tag}
                             </span>
