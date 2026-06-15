@@ -72,7 +72,7 @@ type ProfileTabsSectionProps = {
 
 type TabKey = "overview" | "materials" | "snippets" | "files" | "pins" | "friends" | "activity" | "achievements" | "saved" | "reputation"
 
-const allTabs: Array<{ value: TabKey; label: string }> = [
+const tabs: Array<{ value: TabKey; label: string }> = [
     { value: "overview", label: "Обзор" },
     { value: "materials", label: "Материалы" },
     { value: "snippets", label: "Сниппеты" },
@@ -133,6 +133,7 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
     const [error, setError] = React.useState<string | null>(null)
     const [active, setActive] = React.useState<TabKey>("overview")
     const [pinBusy, setPinBusy] = React.useState<string | null>(null)
+    const profileUser = dashboard.user || user
     const isOwner = Boolean(dashboard.relationship_to_viewer?.is_owner) && !isPublicProfile
 
     const loadDashboard = React.useCallback(async () => {
@@ -145,7 +146,7 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
             setDashboard(payload)
         } catch (requestError) {
             console.log("[PROFILE_DASHBOARD_LOAD_ERROR]", requestError)
-            setError("Не удалось загрузить данные профиля. Проверьте авторизацию или доступ к профилю.")
+            setError("Не удалось загрузить данные профиля. Проверьте авторизацию или backend-логи.")
         } finally {
             setLoading(false)
         }
@@ -156,9 +157,9 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
     }, [loadDashboard])
 
     const pinKeys = React.useMemo(() => new Set((dashboard.pinned_items || []).map((item) => pinKey(item))), [dashboard.pinned_items])
-    const visibleTabs = React.useMemo(() => allTabs.filter((tab) => tab.value !== "saved" || isOwner), [isOwner])
+    const visibleTabs = React.useMemo(() => tabs.filter((tab) => tab.value !== "saved" || isOwner), [isOwner])
     const stats = dashboard.stats || {}
-    const profileUser = dashboard.user || user
+    const earnedAchievements = React.useMemo(() => onlyEarnedAchievements(dashboard.achievements || []), [dashboard.achievements])
 
     async function togglePin(item: ProfileHubItem) {
         const payload = toPinPayload(item)
@@ -178,7 +179,9 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
             await loadDashboard()
         } catch (requestError) {
             console.log("[PROFILE_PIN_ERROR]", requestError)
-            toast.error("Не удалось изменить закреп. Публичными можно закреплять только опубликованные материалы, активные сниппеты и публичные файлы.")
+            toast.error("Не удалось изменить закреп", {
+                description: "Закреплять можно опубликованные материалы, публичные сниппеты и публичные файлы.",
+            })
         } finally {
             setPinBusy(null)
         }
@@ -199,23 +202,9 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
         }
     }
 
-    if (error && !loading) {
-        return (
-            <Card className="border-destructive/30 bg-destructive/5">
-                <CardContent className="flex flex-col gap-3 p-5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-start gap-3">
-                        <Lock className="mt-0.5 size-5 text-destructive" />
-                        <span>{error}</span>
-                    </div>
-                    <Button variant="outline" onClick={() => void loadDashboard()}>Повторить</Button>
-                </CardContent>
-            </Card>
-        )
-    }
-
     return (
         <TooltipProvider>
-            <div className="space-y-6">
+            <div className="space-y-5">
                 <ProfileHeader
                     user={profileUser}
                     isOwner={isOwner}
@@ -224,59 +213,83 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
                     onMessage={openMessage}
                 />
 
-                <StatsRail stats={stats} reputation={dashboard.reputation} loading={loading} />
+                {error && !loading ? <ProfileError message={error} onRetry={loadDashboard} /> : null}
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-                    <main className="min-w-0 space-y-5">
-                        <Tabs value={active} onValueChange={(value) => setActive(value as TabKey)}>
-                            <TabsList variant="line" className="w-full justify-start overflow-x-auto border bg-card/80 p-2">
-                                {visibleTabs.map((tab) => (
-                                    <TabsTrigger key={tab.value} value={tab.value} className="px-3">
-                                        {tab.label}
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
+                <StatsSummary stats={stats} reputation={dashboard.reputation} loading={loading} />
 
-                            <TabsContent value="overview" className="space-y-5">
-                                <PinnedSection
-                                    items={dashboard.pinned_items}
+                <Tabs value={active} onValueChange={(value) => setActive(value as TabKey)} className="gap-4">
+                    <TabsList variant="line" className="h-auto w-full flex-wrap justify-start gap-1 border bg-card/80 p-1.5 rounded-none">
+                        {visibleTabs.map((tab) => (
+                            <TabsTrigger key={tab.value} value={tab.value} className="h-8 flex-none rounded-none px-3 data-active:bg-primary data-active:text-primary-foreground data-active:after:opacity-0">
+                                {tab.label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+                        <main className="min-w-0 space-y-5">
+                            <TabsContent value="overview" className="m-0 space-y-5">
+                                {dashboard.pinned_items.length > 0 ? (
+                                    <ContentSection
+                                        title="Закреплено"
+                                        description="Главные материалы, сниппеты и файлы, которые участник показывает первыми."
+                                        items={dashboard.pinned_items}
+                                        isOwner={isOwner}
+                                        pinKeys={pinKeys}
+                                        pinBusy={pinBusy}
+                                        onTogglePin={togglePin}
+                                        loading={loading}
+                                        featured
+                                    />
+                                ) : null}
+
+                                <ContentSection
+                                    title="Материалы"
+                                    description="Публикации, вопросы и ответы участника."
+                                    items={dashboard.materials}
+                                    emptyTitle={isOwner ? "Создайте первый материал" : "Материалов пока нет"}
+                                    emptyDescription={isOwner ? "Напишите публикацию, задайте вопрос или ответьте участникам — материалы появятся здесь." : "Участник пока не публиковал материалы."}
+                                    action={isOwner ? { href: "/publications/create", label: "Создать публикацию" } : undefined}
                                     isOwner={isOwner}
                                     pinKeys={pinKeys}
                                     pinBusy={pinBusy}
                                     onTogglePin={togglePin}
                                     loading={loading}
                                 />
+
                                 <SectionGrid>
                                     <ContentSection
-                                        title="Лучшие и свежие материалы"
-                                        description="Публикации, вопросы и ответы участника."
-                                        items={dashboard.materials}
-                                        emptyTitle={isOwner ? "Создайте первый материал" : "Материалов пока нет"}
-                                        emptyDescription={isOwner ? "Напишите публикацию, задайте вопрос или ответьте участникам — материалы появятся здесь." : "Участник пока не публиковал материалы."}
-                                        action={isOwner ? { href: "/publications/create", label: "Создать публикацию" } : undefined}
-                                        isOwner={isOwner}
-                                        pinKeys={pinKeys}
-                                        pinBusy={pinBusy}
-                                        onTogglePin={togglePin}
-                                        loading={loading}
-                                    />
-                                    <ContentSection
-                                        title="Публичные сниппеты"
-                                        description="Код из playground, который участник сделал публичным."
-                                        items={dashboard.snippets}
-                                        emptyTitle={isOwner ? "Публичных сниппетов нет" : "Сниппетов пока нет"}
-                                        emptyDescription={isOwner ? "Сохраните код в playground и сделайте сниппет публичным." : "Участник пока не публиковал сниппеты."}
+                                        title="Сниппеты"
+                                        description="Публичный код из playground."
+                                        items={dashboard.snippets.slice(0, 4)}
+                                        emptyTitle="Сниппетов пока нет"
+                                        emptyDescription={isOwner ? "Сделайте сниппет публичным в playground." : "Участник пока не публиковал сниппеты."}
                                         action={isOwner ? { href: "/playground", label: "Открыть playground" } : undefined}
                                         isOwner={isOwner}
                                         pinKeys={pinKeys}
                                         pinBusy={pinBusy}
                                         onTogglePin={togglePin}
                                         loading={loading}
+                                        compact
+                                    />
+                                    <ContentSection
+                                        title="Файлы"
+                                        description="Публичные файлы из хранилища."
+                                        items={dashboard.files.slice(0, 4)}
+                                        emptyTitle="Файлов пока нет"
+                                        emptyDescription={isOwner ? "Загрузите файл и сделайте его публичным." : "Пользователь пока не публиковал файлы."}
+                                        action={isOwner ? { href: "/files", label: "Открыть файлы" } : undefined}
+                                        isOwner={isOwner}
+                                        pinKeys={pinKeys}
+                                        pinBusy={pinBusy}
+                                        onTogglePin={togglePin}
+                                        loading={loading}
+                                        compact
                                     />
                                 </SectionGrid>
                             </TabsContent>
 
-                            <TabsContent value="materials">
+                            <TabsContent value="materials" className="m-0">
                                 <ContentSection
                                     title="Материалы"
                                     description="Все опубликованные публикации, вопросы и ответы."
@@ -292,7 +305,7 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
                                 />
                             </TabsContent>
 
-                            <TabsContent value="snippets">
+                            <TabsContent value="snippets" className="m-0">
                                 <ContentSection
                                     title="Сниппеты"
                                     description="Публичные и доступные владельцу сниппеты из playground."
@@ -308,7 +321,7 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
                                 />
                             </TabsContent>
 
-                            <TabsContent value="files">
+                            <TabsContent value="files" className="m-0">
                                 <FilesSection
                                     items={dashboard.files}
                                     isOwner={isOwner}
@@ -319,31 +332,36 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
                                 />
                             </TabsContent>
 
-                            <TabsContent value="pins">
-                                <PinnedSection
+                            <TabsContent value="pins" className="m-0">
+                                <ContentSection
+                                    title="Закрепы"
+                                    description="Материалы, сниппеты и файлы, закреплённые в публичном профиле."
                                     items={dashboard.pinned_items}
+                                    emptyTitle={isOwner ? "Закрепов пока нет" : "Участник ничего не закрепил"}
+                                    emptyDescription={isOwner ? "Закрепите публикацию, вопрос, сниппет или публичный файл из меню элемента." : "Закрепы появятся, когда участник выберет важные материалы."}
                                     isOwner={isOwner}
                                     pinKeys={pinKeys}
                                     pinBusy={pinBusy}
                                     onTogglePin={togglePin}
                                     loading={loading}
+                                    featured
                                 />
                             </TabsContent>
 
-                            <TabsContent value="friends">
+                            <TabsContent value="friends" className="m-0">
                                 <PeopleSection items={dashboard.friends} isOwner={isOwner} loading={loading} />
                             </TabsContent>
 
-                            <TabsContent value="activity">
+                            <TabsContent value="activity" className="m-0">
                                 <ActivitySection items={dashboard.activity} isOwner={isOwner} loading={loading} />
                             </TabsContent>
 
-                            <TabsContent value="achievements">
-                                <AchievementsSection items={dashboard.achievements} loading={loading} />
+                            <TabsContent value="achievements" className="m-0">
+                                <AchievementsSection items={earnedAchievements} loading={loading} />
                             </TabsContent>
 
                             {isOwner ? (
-                                <TabsContent value="saved">
+                                <TabsContent value="saved" className="m-0">
                                     <ContentSection
                                         title="Сохранённое"
                                         description="Приватный раздел: сохранённые публикации, вопросы и ответы."
@@ -359,21 +377,35 @@ export function ProfileTabsSection({ user, dashboardUserId, isAuthenticated = tr
                                 </TabsContent>
                             ) : null}
 
-                            <TabsContent value="reputation">
+                            <TabsContent value="reputation" className="m-0">
                                 <ReputationSection dashboard={dashboard} loading={loading} />
                             </TabsContent>
-                        </Tabs>
-                    </main>
+                        </main>
 
-                    <aside className="space-y-5">
-                        <ProfileCompletenessCard user={profileUser} completion={dashboard.completion} isOwner={isOwner} loading={loading} />
-                        <LinksCard user={profileUser} isOwner={isOwner} />
-                        <ReputationCard dashboard={dashboard} loading={loading} />
-                        <MiniAchievements items={dashboard.achievements} loading={loading} />
-                    </aside>
-                </div>
+                        <aside className="space-y-4">
+                            <ProfileCompletenessCard user={profileUser} completion={dashboard.completion} isOwner={isOwner} loading={loading} />
+                            <LinksCard user={profileUser} isOwner={isOwner} />
+                            <ReputationCard dashboard={dashboard} loading={loading} />
+                            <MiniAchievements items={earnedAchievements} loading={loading} />
+                        </aside>
+                    </div>
+                </Tabs>
             </div>
         </TooltipProvider>
+    )
+}
+
+function ProfileError({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <Card className="rounded-none border-destructive/30 bg-destructive/5" size="sm">
+            <CardContent className="flex flex-col gap-3 p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                <div className="flex items-start gap-3">
+                    <Lock className="mt-0.5 size-5 text-destructive" />
+                    <span>{message}</span>
+                </div>
+                <Button variant="outline" className="rounded-none" onClick={() => void onRetry()}>Повторить</Button>
+            </CardContent>
+        </Card>
     )
 }
 
@@ -392,22 +424,27 @@ function ProfileHeader({
 }) {
     const initials = (user.name || "U").slice(0, 2).toUpperCase()
     const registeredAt = formatDate(user.created_at, { month: "long", year: "numeric" })
+    const meta = [
+        user.location ? { icon: MapPin, value: user.location } : null,
+        user.direction ? { icon: Hash, value: user.direction } : null,
+        { icon: CalendarDays, value: `с ${registeredAt}` },
+    ].filter(Boolean) as Array<{ icon: React.ElementType; value: string }>
 
     return (
-        <section className="overflow-hidden border bg-card text-card-foreground shadow-sm">
-            <div className="h-24 border-b bg-[linear-gradient(135deg,rgba(0,193,106,.22),rgba(0,0,0,.08)_45%,rgba(255,255,255,.03))]" style={user.cover_url ? { backgroundImage: `linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,.78)), url(${user.cover_url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
-            <div className="grid gap-5 p-5 md:grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-end">
-                <Avatar className="-mt-16 size-28 border-4 border-background bg-muted shadow-xl" size="lg">
+        <section className="overflow-hidden rounded-none border bg-card/90 text-card-foreground shadow-sm">
+            <div className="h-1 bg-primary/70" />
+            <div className="grid gap-4 p-5 md:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-center">
+                <Avatar className="size-20 rounded-none border bg-muted" size="lg">
                     <AvatarImage src={user.avatar_url || user.avatar || undefined} alt={user.name} />
-                    <AvatarFallback className="text-2xl font-semibold">{initials}</AvatarFallback>
+                    <AvatarFallback className="rounded-none text-2xl font-semibold">{initials}</AvatarFallback>
                 </Avatar>
 
                 <div className="min-w-0 space-y-3">
                     <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                             <h2 className="truncate text-3xl font-semibold tracking-tight">{user.name}</h2>
-                            {user.role && user.role !== "user" ? <Badge variant="secondary"><ShieldCheck className="size-3" />{user.role}</Badge> : null}
-                            {loading ? <Skeleton className="h-5 w-20" /> : <Badge variant="outline">{user.reputation_score || 0} реп.</Badge>}
+                            {loading ? <Skeleton className="h-5 w-20" /> : <Badge variant="outline" className="rounded-none">{user.reputation_score || 0} реп.</Badge>}
+                            {user.role && user.role !== "user" ? <Badge variant="secondary" className="rounded-none"><ShieldCheck className="size-3" />{user.role}</Badge> : null}
                         </div>
                         <p className="text-sm text-muted-foreground">@user-{user.id}{user.headline ? ` · ${user.headline}` : " · участник сообщества Вектор"}</p>
                     </div>
@@ -415,50 +452,37 @@ function ProfileHeader({
                     {user.bio ? (
                         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{user.bio}</p>
                     ) : isOwner ? (
-                        <p className="max-w-3xl border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">Заполните bio в настройках, чтобы профиль выглядел как публичная страница автора, а не пустая карточка.</p>
+                        <p className="max-w-3xl border border-dashed bg-background/45 p-3 text-sm leading-6 text-muted-foreground">Заполните bio, направление и ссылки в настройках — профиль станет похож на публичную страницу автора.</p>
                     ) : null}
 
                     <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                        {user.location ? <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" />{user.location}</span> : null}
-                        {user.direction ? <span className="inline-flex items-center gap-1"><Hash className="size-3.5" />{user.direction}</span> : null}
-                        <span className="inline-flex items-center gap-1"><CalendarDays className="size-3.5" />с {registeredAt}</span>
+                        {meta.map(({ icon: Icon, value }) => (
+                            <span key={value} className="inline-flex items-center gap-1"><Icon className="size-3.5" />{value}</span>
+                        ))}
                     </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 lg:justify-end">
+                <div className="flex flex-wrap gap-2 xl:justify-end">
                     {isOwner ? (
                         <>
-                            <Button asChild>
-                                <Link href="/settings">
-                                    <Sparkles className="size-4" />
-                                    Редактировать
-                                </Link>
+                            <Button asChild className="rounded-none">
+                                <Link href="/settings"><Sparkles className="size-4" />Редактировать</Link>
                             </Button>
-                            <Button asChild variant="outline">
-                                <Link href="/publications/create">
-                                    <Plus className="size-4" />
-                                    Публикация
-                                </Link>
+                            <Button asChild variant="outline" className="rounded-none">
+                                <Link href="/publications/create"><Plus className="size-4" />Публикация</Link>
                             </Button>
-                            <Button asChild variant="outline">
-                                <Link href="/questions/create">
-                                    <MessageSquare className="size-4" />
-                                    Вопрос
-                                </Link>
+                            <Button asChild variant="outline" className="rounded-none">
+                                <Link href="/questions/create"><MessageSquare className="size-4" />Вопрос</Link>
                             </Button>
-                            <Button asChild variant="outline">
-                                <Link href="/files">
-                                    <UploadCloud className="size-4" />
-                                    Файл
-                                </Link>
+                            <Button asChild variant="outline" className="rounded-none">
+                                <Link href="/files"><UploadCloud className="size-4" />Файл</Link>
                             </Button>
                         </>
                     ) : (
                         <>
                             <SubscribeButton type="user" id={user.id} disabled={!isAuthenticated} label="Подписаться" activeLabel="Вы подписаны" />
-                            <Button variant="outline" size="sm" onClick={onMessage} disabled={!isAuthenticated}>
-                                <MessageSquare className="size-4" />
-                                Написать
+                            <Button variant="outline" size="sm" className="rounded-none" onClick={onMessage} disabled={!isAuthenticated}>
+                                <MessageSquare className="size-4" />Написать
                             </Button>
                             <ReportDialog targetType="user" targetId={user.id} label="Пожаловаться" variant="button" isAuthenticated={isAuthenticated} />
                         </>
@@ -469,7 +493,7 @@ function ProfileHeader({
     )
 }
 
-function StatsRail({ stats, reputation, loading }: { stats: Record<string, number | undefined>; reputation: ProfileDashboard["reputation"]; loading: boolean }) {
+function StatsSummary({ stats, reputation, loading }: { stats: Record<string, number | undefined>; reputation: ProfileDashboard["reputation"]; loading: boolean }) {
     const items = [
         { label: "Репутация", value: reputation.score ?? stats.reputation ?? 0, icon: Trophy },
         { label: "Материалы", value: (stats.publications || 0) + (stats.questions || 0) + (stats.answers || 0), icon: Newspaper },
@@ -480,44 +504,26 @@ function StatsRail({ stats, reputation, loading }: { stats: Record<string, numbe
     ]
 
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {items.map(({ label, value, icon: Icon }) => (
-                <Card key={label} className="bg-card/80" size="sm">
-                    <CardContent className="flex items-center justify-between gap-3 p-4">
-                        <div>
-                            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-                            {loading ? <Skeleton className="mt-2 h-7 w-12" /> : <p className="mt-1 text-2xl font-semibold">{value}</p>}
+        <Card className="rounded-none bg-card/80" size="sm">
+            <CardContent className="p-0">
+                <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 lg:divide-x lg:divide-y-0">
+                    {items.map(({ label, value, icon: Icon }) => (
+                        <div key={label} className="flex items-center justify-between gap-3 p-4">
+                            <div>
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+                                {loading ? <Skeleton className="mt-2 h-6 w-12" /> : <p className="mt-1 text-2xl font-semibold">{value}</p>}
+                            </div>
+                            <Icon className="size-5 text-primary/80" />
                         </div>
-                        <div className="flex size-9 items-center justify-center border bg-primary/10 text-primary">
-                            <Icon className="size-4" />
-                        </div>
-                    </CardContent>
-                </Card>
-            ))}
-        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
     )
 }
 
 function SectionGrid({ children }: { children: React.ReactNode }) {
     return <div className="grid gap-5 lg:grid-cols-2">{children}</div>
-}
-
-function PinnedSection({ items, isOwner, pinKeys, pinBusy, onTogglePin, loading }: ContentSectionProps) {
-    return (
-        <ContentSection
-            title="Закреплено в профиле"
-            description="Главные материалы, файлы и сниппеты, которые участник хочет показать первыми."
-            items={items}
-            emptyTitle={isOwner ? "Закрепов пока нет" : "Участник ничего не закрепил"}
-            emptyDescription={isOwner ? "Закрепите публикацию, вопрос, сниппет или публичный файл из списка ниже." : "Закрепы появятся, когда участник выберет важные материалы."}
-            isOwner={isOwner}
-            pinKeys={pinKeys}
-            pinBusy={pinBusy}
-            onTogglePin={onTogglePin}
-            loading={loading}
-            featured
-        />
-    )
 }
 
 type ContentSectionProps = {
@@ -533,22 +539,23 @@ type ContentSectionProps = {
     onTogglePin: (item: ProfileHubItem) => void
     loading: boolean
     featured?: boolean
+    compact?: boolean
 }
 
-function ContentSection({ title, description, items, emptyTitle, emptyDescription, action, isOwner, pinKeys, pinBusy, onTogglePin, loading, featured = false }: ContentSectionProps) {
+function ContentSection({ title, description, items, emptyTitle, emptyDescription, action, isOwner, pinKeys, pinBusy, onTogglePin, loading, featured = false, compact = false }: ContentSectionProps) {
     return (
-        <Card className={cn("bg-card/80", featured && "border-primary/30 bg-primary/5")}>
+        <Card className={cn("rounded-none bg-card/80", featured && "border-primary/25 bg-primary/5")} size={compact ? "sm" : "default"}>
             {title ? (
                 <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="space-y-1">
                         <CardTitle>{title}</CardTitle>
                         {description ? <CardDescription>{description}</CardDescription> : null}
                     </div>
-                    {action ? <Button asChild size="sm" variant="outline"><Link href={action.href}>{action.label}</Link></Button> : null}
+                    {action ? <Button asChild size="sm" variant="outline" className="rounded-none"><Link href={action.href}>{action.label}</Link></Button> : null}
                 </CardHeader>
             ) : null}
             <CardContent className="space-y-3">
-                {loading ? <LoadingList /> : items.length > 0 ? items.map((item) => (
+                {loading ? <LoadingList rows={compact ? 2 : 3} /> : items.length > 0 ? items.map((item) => (
                     <HubItemCard
                         key={`${item.type}-${item.id}-${item.pinned_at || item.saved_at || "item"}`}
                         item={item}
@@ -558,7 +565,7 @@ function ContentSection({ title, description, items, emptyTitle, emptyDescriptio
                         onTogglePin={onTogglePin}
                     />
                 )) : (
-                    <EmptyState title={emptyTitle || "Пока пусто"} description={emptyDescription || "Данных для этого раздела пока нет."} action={action} />
+                    <EmptyState title={emptyTitle || "Пока пусто"} description={emptyDescription || "Данных для этого раздела пока нет."} action={action} compact={compact} />
                 )}
             </CardContent>
         </Card>
@@ -567,13 +574,13 @@ function ContentSection({ title, description, items, emptyTitle, emptyDescriptio
 
 function FilesSection({ items, isOwner, pinKeys, pinBusy, onTogglePin, loading }: Omit<ContentSectionProps, "title" | "description">) {
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80">
             <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                     <CardTitle>Файлы пользователя</CardTitle>
-                    <CardDescription>Публичные файлы из файлового хранилища. Владелец видит также свои доступные действия.</CardDescription>
+                    <CardDescription>Публичные файлы из файлового хранилища. Владелец видит свои доступные действия.</CardDescription>
                 </div>
-                {isOwner ? <Button asChild size="sm" variant="outline"><Link href="/files"><UploadCloud className="size-4" />Открыть хранилище</Link></Button> : null}
+                {isOwner ? <Button asChild size="sm" variant="outline" className="rounded-none"><Link href="/files"><UploadCloud className="size-4" />Открыть хранилище</Link></Button> : null}
             </CardHeader>
             <CardContent className="space-y-3">
                 {loading ? <LoadingList /> : items.length > 0 ? items.map((item) => (
@@ -606,10 +613,10 @@ function HubItemCard({ item, isOwner, isPinned, busy, onTogglePin }: { item: Pro
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={isPinned ? "default" : "outline"}>{itemTypeLabels[item.type] || item.type}</Badge>
-                        {item.language ? <Badge variant="secondary">{item.language}</Badge> : null}
-                        {item.visibility ? <Badge variant="outline">{visibilityLabel(item.visibility)}</Badge> : null}
-                        {item.points ? <Badge variant="secondary">+{item.points}</Badge> : null}
+                        <Badge variant={isPinned ? "default" : "outline"} className="rounded-none">{itemTypeLabels[item.type] || item.type}</Badge>
+                        {item.language ? <Badge variant="secondary" className="rounded-none">{item.language}</Badge> : null}
+                        {item.visibility ? <Badge variant="outline" className="rounded-none">{visibilityLabel(item.visibility)}</Badge> : null}
+                        {item.points ? <Badge variant="secondary" className="rounded-none">+{item.points}</Badge> : null}
                         {item.created_at ? <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span> : null}
                     </div>
                     <h3 className="line-clamp-2 text-base font-semibold leading-6">
@@ -633,7 +640,7 @@ function HubItemCard({ item, isOwner, isPinned, busy, onTogglePin }: { item: Pro
                     {isFile && item.download_url ? (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button asChild size="icon-sm" variant="ghost">
+                                <Button asChild size="icon-sm" variant="ghost" className="rounded-none">
                                     <a href={item.download_url} aria-label="Скачать файл"><Download className="size-4" /></a>
                                 </Button>
                             </TooltipTrigger>
@@ -642,7 +649,7 @@ function HubItemCard({ item, isOwner, isPinned, busy, onTogglePin }: { item: Pro
                     ) : null}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon-sm" aria-label="Действия">
+                            <Button variant="ghost" size="icon-sm" className="rounded-none" aria-label="Действия">
                                 <MoreHorizontal className="size-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -690,7 +697,7 @@ function ItemMeta({ item }: { item: ProfileHubItem }) {
 
 function PeopleSection({ items, isOwner, loading }: { items: ProfileHubItem[]; isOwner: boolean; loading: boolean }) {
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80">
             <CardHeader>
                 <CardTitle>Друзья</CardTitle>
                 <CardDescription>Люди, с которыми участник связан внутри платформы.</CardDescription>
@@ -700,9 +707,9 @@ function PeopleSection({ items, isOwner, loading }: { items: ProfileHubItem[]; i
                     <div className="grid gap-3 md:grid-cols-2">
                         {items.map((friend) => (
                             <Link key={friend.id} href={friend.url || `/users/${friend.id}`} className="flex items-center gap-3 border bg-background/45 p-3 hover:border-primary/40">
-                                <Avatar className="size-10">
+                                <Avatar className="size-10 rounded-none">
                                     <AvatarImage src={friend.avatar_url || friend.avatar || undefined} />
-                                    <AvatarFallback>{(friend.name || friend.title || "U").slice(0, 2).toUpperCase()}</AvatarFallback>
+                                    <AvatarFallback className="rounded-none">{(friend.name || friend.title || "U").slice(0, 2).toUpperCase()}</AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
                                     <p className="truncate font-medium">{friend.name || friend.title}</p>
@@ -719,10 +726,10 @@ function PeopleSection({ items, isOwner, loading }: { items: ProfileHubItem[]; i
 
 function ActivitySection({ items, isOwner, loading }: { items: ProfileHubItem[]; isOwner: boolean; loading: boolean }) {
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80">
             <CardHeader>
                 <CardTitle>Последняя активность</CardTitle>
-                <CardDescription>Реальные события профиля: материалы, ответы, комментарии, файлы, достижения.</CardDescription>
+                <CardDescription>События профиля: материалы, ответы, комментарии, файлы, достижения.</CardDescription>
             </CardHeader>
             <CardContent>
                 {loading ? <LoadingList /> : items.length ? (
@@ -748,10 +755,10 @@ function ActivitySection({ items, isOwner, loading }: { items: ProfileHubItem[];
 
 function AchievementsSection({ items, loading }: { items: ProfileHubItem[]; loading: boolean }) {
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80">
             <CardHeader>
-                <CardTitle>Достижения</CardTitle>
-                <CardDescription>Бейджи выдаются за реальные действия и вклад в сообщество.</CardDescription>
+                <CardTitle>Полученные достижения</CardTitle>
+                <CardDescription>Показываем только реально полученные бейджи, без фейковых заглушек.</CardDescription>
             </CardHeader>
             <CardContent>
                 {loading ? <LoadingList /> : items.length ? (
@@ -759,16 +766,16 @@ function AchievementsSection({ items, loading }: { items: ProfileHubItem[]; load
                         {items.map((item) => (
                             <div key={item.id || item.title} className="border bg-background/45 p-4">
                                 <div className="flex items-center justify-between gap-3">
-                                    <div className="flex size-10 items-center justify-center border bg-primary/10 text-primary"><Award className="size-5" /></div>
-                                    <Badge variant={item.unlocked_at ? "default" : "outline"}>{item.rarity || "common"}</Badge>
+                                    <div className="flex size-10 items-center justify-center border bg-primary/10 text-primary"><Award className="size-4" /></div>
+                                    <Badge variant="default" className="rounded-none">получено</Badge>
                                 </div>
                                 <h3 className="mt-3 font-semibold">{item.title || item.name}</h3>
                                 {item.description ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.description}</p> : null}
-                                {item.target ? <Progress className="mt-3" value={Math.min(100, ((item.progress || 0) / item.target) * 100)} /> : null}
+                                {item.unlocked_at || item.created_at ? <p className="mt-3 text-xs text-muted-foreground">{formatDate(item.unlocked_at || item.created_at)}</p> : null}
                             </div>
                         ))}
                     </div>
-                ) : <EmptyState title="Достижений пока нет" description="Достижения появятся после первых действий: публикаций, ответов, реакций и заполнения профиля." />}
+                ) : <EmptyState title="Достижений пока нет" description="Бейджи появятся после реальных действий: публикаций, ответов, реакций и активности." />}
             </CardContent>
         </Card>
     )
@@ -777,9 +784,9 @@ function AchievementsSection({ items, loading }: { items: ProfileHubItem[]; load
 function ReputationSection({ dashboard, loading }: { dashboard: ProfileDashboard; loading: boolean }) {
     const events = dashboard.reputation.events || []
     return (
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
             <ReputationCard dashboard={dashboard} loading={loading} />
-            <Card className="bg-card/80">
+            <Card className="rounded-none bg-card/80">
                 <CardHeader>
                     <CardTitle>История репутации</CardTitle>
                     <CardDescription>Начисления и списания, которые уже есть в backend.</CardDescription>
@@ -792,7 +799,7 @@ function ReputationSection({ dashboard, loading }: { dashboard: ProfileDashboard
                                 {event.description ? <p className="mt-1 text-xs text-muted-foreground">{event.description}</p> : null}
                                 {event.created_at ? <p className="mt-1 text-xs text-muted-foreground">{formatDate(event.created_at)}</p> : null}
                             </div>
-                            <Badge variant={(event.points || 0) >= 0 ? "default" : "destructive"}>{(event.points || 0) > 0 ? "+" : ""}{event.points || 0}</Badge>
+                            <Badge variant={(event.points || 0) >= 0 ? "default" : "destructive"} className="rounded-none">{(event.points || 0) > 0 ? "+" : ""}{event.points || 0}</Badge>
                         </div>
                     )) : <EmptyState title="Истории репутации пока нет" description="Репутация будет начисляться за полезные действия, реакции и принятые ответы." />}
                 </CardContent>
@@ -804,7 +811,7 @@ function ReputationSection({ dashboard, loading }: { dashboard: ProfileDashboard
 function ProfileCompletenessCard({ user, completion, isOwner, loading }: { user: User; completion: number; isOwner: boolean; loading: boolean }) {
     const checks = [
         { label: "Аватар", done: Boolean(user.avatar_url || user.avatar) },
-        { label: "Headline", done: Boolean(user.headline) },
+        { label: "Заголовок", done: Boolean(user.headline) },
         { label: "Bio", done: Boolean(user.bio) },
         { label: "Направление", done: Boolean(user.direction) },
         { label: "Локация", done: Boolean(user.location) },
@@ -812,7 +819,7 @@ function ProfileCompletenessCard({ user, completion, isOwner, loading }: { user:
     ]
 
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80" size="sm">
             <CardHeader>
                 <CardTitle>Заполнение профиля</CardTitle>
                 <CardDescription>{isOwner ? "Что ещё улучшит публичный профиль." : "Насколько профиль заполнен."}</CardDescription>
@@ -828,7 +835,7 @@ function ProfileCompletenessCard({ user, completion, isOwner, loading }: { user:
                         </div>
                     ))}
                 </div>
-                {isOwner ? <Button asChild variant="outline" className="w-full"><Link href="/settings">Дополнить профиль</Link></Button> : null}
+                {isOwner ? <Button asChild variant="outline" className="w-full rounded-none"><Link href="/settings">Дополнить профиль</Link></Button> : null}
             </CardContent>
         </Card>
     )
@@ -838,15 +845,15 @@ function LinksCard({ user, isOwner }: { user: User; isOwner: boolean }) {
     const website = normalizeUrl(user.website_url)
     const github = normalizeUrl(user.github_url)
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80" size="sm">
             <CardHeader>
                 <CardTitle>Контакты и ссылки</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
                 {user.location ? <InfoLine icon={MapPin} label="Локация" value={user.location} /> : null}
                 {user.direction ? <InfoLine icon={Hash} label="Направление" value={user.direction} /> : null}
-                {website ? <Button asChild variant="outline" className="w-full justify-start"><a href={website} target="_blank" rel="noreferrer"><Globe2 className="size-4" />Сайт</a></Button> : null}
-                {github ? <Button asChild variant="outline" className="w-full justify-start"><a href={github} target="_blank" rel="noreferrer"><Code2 className="size-4" />GitHub</a></Button> : null}
+                {website ? <Button asChild variant="outline" className="w-full justify-start rounded-none"><a href={website} target="_blank" rel="noreferrer"><Globe2 className="size-4" />Сайт</a></Button> : null}
+                {github ? <Button asChild variant="outline" className="w-full justify-start rounded-none"><a href={github} target="_blank" rel="noreferrer"><Code2 className="size-4" />GitHub</a></Button> : null}
                 {!website && !github && !user.location && !user.direction ? <EmptyState title="Ссылок нет" description={isOwner ? "Добавьте GitHub, сайт, город или направление в настройках." : "Пользователь не указал публичные контакты."} compact /> : null}
             </CardContent>
         </Card>
@@ -857,10 +864,10 @@ function ReputationCard({ dashboard, loading }: { dashboard: ProfileDashboard; l
     const level = dashboard.reputation.level
     const progress = typeof level?.progress === "number" ? level.progress : Math.min(100, dashboard.reputation.score)
     return (
-        <Card className="border-primary/25 bg-primary/5">
+        <Card className="rounded-none border-primary/25 bg-primary/5" size="sm">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Trophy className="size-5 text-primary" />Репутация</CardTitle>
-                <CardDescription>Stack Overflow-подход: баллы, уровень и история.</CardDescription>
+                <CardDescription>Баллы, уровень и история.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {loading ? <Skeleton className="h-10 w-24" /> : <div className="text-4xl font-semibold">{dashboard.reputation.score}</div>}
@@ -884,9 +891,9 @@ function ReputationCard({ dashboard, loading }: { dashboard: ProfileDashboard; l
 function MiniAchievements({ items, loading }: { items: ProfileHubItem[]; loading: boolean }) {
     const visible = items.slice(0, 4)
     return (
-        <Card className="bg-card/80">
+        <Card className="rounded-none bg-card/80" size="sm">
             <CardHeader>
-                <CardTitle>Ближайшие достижения</CardTitle>
+                <CardTitle>Достижения</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
                 {loading ? <LoadingList rows={2} /> : visible.length ? visible.map((item) => (
@@ -894,7 +901,7 @@ function MiniAchievements({ items, loading }: { items: ProfileHubItem[]; loading
                         <div className="flex items-center gap-2 font-medium"><Star className="size-4 text-primary" />{item.title || item.name}</div>
                         {item.description ? <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p> : null}
                     </div>
-                )) : <EmptyState title="Достижений нет" description="Первые бейджи появятся после действий." compact />}
+                )) : <EmptyState title="Достижений пока нет" description="Первые бейджи появятся после действий." compact />}
             </CardContent>
         </Card>
     )
@@ -906,13 +913,13 @@ function InfoLine({ icon: Icon, label, value }: { icon: React.ElementType; label
 
 function EmptyState({ title, description, action, compact = false }: { title: string; description: string; action?: { href: string; label: string }; compact?: boolean }) {
     return (
-        <div className={cn("border border-dashed bg-muted/10 p-5 text-sm", compact && "p-3")}>
+        <div className={cn("border border-dashed bg-background/35 p-5 text-sm", compact && "p-3")}>
             <div className="flex items-start gap-3">
                 <Flag className="mt-0.5 size-4 text-muted-foreground" />
                 <div className="space-y-1">
                     <p className="font-medium text-foreground">{title}</p>
                     <p className="leading-6 text-muted-foreground">{description}</p>
-                    {action ? <Button asChild size="sm" variant="outline" className="mt-2"><Link href={action.href}>{action.label}</Link></Button> : null}
+                    {action ? <Button asChild size="sm" variant="outline" className="mt-2 rounded-none"><Link href={action.href}>{action.label}</Link></Button> : null}
                 </div>
             </div>
         </div>
@@ -920,7 +927,11 @@ function EmptyState({ title, description, action, compact = false }: { title: st
 }
 
 function LoadingList({ rows = 3 }: { rows?: number }) {
-    return <div className="space-y-3">{Array.from({ length: rows }).map((_, index) => <Skeleton key={index} className="h-24 w-full" />)}</div>
+    return <div className="space-y-3">{Array.from({ length: rows }).map((_, index) => <Skeleton key={index} className="h-20 w-full rounded-none" />)}</div>
+}
+
+function onlyEarnedAchievements(items: ProfileHubItem[]) {
+    return items.filter((item) => Boolean(item.unlocked_at || item.created_at || item.meta?.unlocked_at))
 }
 
 function pinKey(item: ProfileHubItem) {
