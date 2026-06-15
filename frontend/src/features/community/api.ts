@@ -11,6 +11,7 @@ import type {
     CommunityTrend,
     CommunityRecommendation,
     RecommendationsResponse,
+    RecommendationEventPayload,
     InterestProfile,
 } from "@/features/community/types"
 
@@ -36,6 +37,11 @@ export async function getCommunityRecommendations(period: "day" | "week" | "mont
 
 export async function getRecommendations(period: "day" | "week" | "month" = "week") {
     const response = await browserApi.get<RecommendationsResponse>("/laravel/recommendations", { params: { period } })
+    return response.data
+}
+
+export async function trackRecommendationEvent(payload: RecommendationEventPayload) {
+    const response = await browserApi.post<{ ok: true }>("/laravel/recommendations/events", payload)
     return response.data
 }
 

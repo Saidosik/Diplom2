@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\IssueQuestion;
 use App\Models\Publication;
 use App\Models\Reaction;
+use App\Models\RecommendationEvent;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
@@ -85,6 +87,145 @@ class RecommendationsEndpointTest extends TestCase
             $service->questionRecommendationScore($solved->load('tags'), $profile, $user),
             $service->questionRecommendationScore($unanswered->load('tags'), $profile, $user),
         );
+    }
+
+
+    public function test_guest_event_post_creates_event_and_sets_cookie(): void
+    {
+        $publication = $this->publication(['title' => 'Tracked publication', 'slug' => 'tracked-publication']);
+
+        $response = $this->postJson('/api/recommendations/events', [
+            'event_type' => 'click',
+            'target_type' => 'publication',
+            'target_id' => $publication->id,
+            'context' => 'home',
+            'metadata' => ['source' => 'recommendations_block', 'position' => 1],
+        ])->assertOk()
+            ->assertCookie('vector_guest_id')
+            ->assertJsonPath('ok', true);
+
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+
+        $this->assertDatabaseHas('recommendation_events', [
+            'user_id' => null,
+            'event_type' => 'click',
+            'target_type' => 'publication',
+            'target_id' => $publication->id,
+            'context' => 'home',
+            'weight' => RecommendationEvent::weightFor('click'),
+        ]);
+    }
+
+    public function test_authenticated_event_post_writes_user_id(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $publication = $this->publication(['title' => 'Auth tracked', 'slug' => 'auth-tracked']);
+
+        $this->withToken(JWTAuth::fromUser($user))->postJson('/api/recommendations/events', [
+            'event_type' => 'like',
+            'target_type' => 'publication',
+            'target_id' => $publication->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('recommendation_events', [
+            'user_id' => $user->id,
+            'guest_id' => null,
+            'event_type' => 'like',
+            'target_id' => $publication->id,
+        ]);
+    }
+
+    public function test_invalid_event_type_returns_422(): void
+    {
+        $this->postJson('/api/recommendations/events', [
+            'event_type' => 'bad_signal',
+            'target_type' => 'publication',
+        ])->assertStatus(422);
+    }
+
+    public function test_hidden_publication_is_excluded_from_recommendations(): void
+    {
+        $publication = $this->publication(['title' => 'Hidden publication', 'slug' => 'hidden-publication']);
+        $this->publication(['title' => 'Visible after hide', 'slug' => 'visible-after-hide']);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-hidden',
+            'event_type' => RecommendationEvent::EVENT_HIDE,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $publication->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_HIDE),
+        ]);
+
+        $slugs = collect($this->withHeader('X-Vector-Guest-Id', 'guest-hidden')->getJson('/api/recommendations')->json('data'))->pluck('item.slug');
+
+        $this->assertFalse($slugs->contains('hidden-publication'));
+    }
+
+    public function test_guest_with_click_and_open_tag_events_gets_guest_mode_and_signals(): void
+    {
+        $tag = Tag::create(['name' => 'Laravel', 'slug' => 'laravel', 'status' => Tag::STATUS_ACTIVE]);
+        $publication = $this->publication(['title' => 'Laravel publication', 'slug' => 'laravel-publication']);
+        $publication->tags()->attach($tag->id);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-signal',
+            'event_type' => RecommendationEvent::EVENT_CLICK,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $publication->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_CLICK),
+        ]);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-signal',
+            'event_type' => RecommendationEvent::EVENT_OPEN_TAG,
+            'target_type' => RecommendationEvent::TARGET_TAG,
+            'target_id' => $tag->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_OPEN_TAG),
+        ]);
+
+        $this->withHeader('X-Vector-Guest-Id', 'guest-signal')->getJson('/api/recommendations')
+            ->assertOk()
+            ->assertJsonPath('mode', 'guest')
+            ->assertJsonPath('meta.strategy', 'guest_events')
+            ->assertJson(fn ($json) => $json->where('meta.signals_count', fn ($count) => $count > 0)->etc());
+    }
+
+    public function test_authenticated_user_events_affect_personalized_recommendations(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $tag = Tag::create(['name' => 'Events', 'slug' => 'events', 'status' => Tag::STATUS_ACTIVE]);
+        $boosted = $this->publication(['title' => 'Boosted by events', 'slug' => 'boosted-by-events', 'published_at' => now()->subDay()]);
+        $regular = $this->publication(['title' => 'Regular publication', 'slug' => 'regular-publication', 'published_at' => now()]);
+        $boosted->tags()->attach($tag->id);
+        RecommendationEvent::create([
+            'user_id' => $user->id,
+            'event_type' => RecommendationEvent::EVENT_OPEN_TAG,
+            'target_type' => RecommendationEvent::TARGET_TAG,
+            'target_id' => $tag->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_OPEN_TAG),
+        ]);
+        RecommendationEvent::create([
+            'user_id' => $user->id,
+            'event_type' => RecommendationEvent::EVENT_CLICK,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $boosted->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_CLICK),
+        ]);
+
+        $data = $this->withToken(JWTAuth::fromUser($user))->getJson('/api/recommendations')
+            ->assertOk()
+            ->assertJsonPath('meta.strategy', 'personalized_events')
+            ->json('data');
+
+        $this->assertSame('boosted-by-events', collect($data)->where('type', 'publication')->first()['item']['slug']);
+        $this->assertNotNull($regular);
+    }
+
+    public function test_event_post_always_returns_no_store(): void
+    {
+        $response = $this->postJson('/api/recommendations/events', [
+            'event_type' => 'view',
+            'target_type' => 'publication',
+        ])->assertOk();
+
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
     }
 
     private function publication(array $attributes = []): Publication
