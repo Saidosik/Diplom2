@@ -13,7 +13,6 @@ import {
     FileArchive,
     FileText,
     Flag,
-    Github,
     Globe2,
     Hash,
     Loader2,
@@ -847,7 +846,7 @@ function LinksCard({ user, isOwner }: { user: User; isOwner: boolean }) {
                 {user.location ? <InfoLine icon={MapPin} label="Локация" value={user.location} /> : null}
                 {user.direction ? <InfoLine icon={Hash} label="Направление" value={user.direction} /> : null}
                 {website ? <Button asChild variant="outline" className="w-full justify-start"><a href={website} target="_blank" rel="noreferrer"><Globe2 className="size-4" />Сайт</a></Button> : null}
-                {github ? <Button asChild variant="outline" className="w-full justify-start"><a href={github} target="_blank" rel="noreferrer"><Github className="size-4" />GitHub</a></Button> : null}
+                {github ? <Button asChild variant="outline" className="w-full justify-start"><a href={github} target="_blank" rel="noreferrer"><Code2 className="size-4" />GitHub</a></Button> : null}
                 {!website && !github && !user.location && !user.direction ? <EmptyState title="Ссылок нет" description={isOwner ? "Добавьте GitHub, сайт, город или направление в настройках." : "Пользователь не указал публичные контакты."} compact /> : null}
             </CardContent>
         </Card>
