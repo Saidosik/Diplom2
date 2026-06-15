@@ -18,6 +18,8 @@ export type PublicationBlockType =
     | "warning"
     | "link"
     | "divider"
+    | "table"
+    | "diagram"
 
 
 export type PublicationTag = {
@@ -76,6 +78,15 @@ export type Publication = {
     excerpt?: string | null
     cover_image_path?: string | null
     cover_image_url?: string | null
+    cover_file_id?: number | null
+    cover_alt_text?: string | null
+    cover_caption?: string | null
+    last_autosaved_at?: string | null
+    autosave_version?: number
+    editor_state?: Record<string, unknown> | null
+    seo_title?: string | null
+    seo_description?: string | null
+    canonical_url?: string | null
     reading_time_minutes?: number | null
     likes_count?: number
     dislikes_count?: number
@@ -100,6 +111,12 @@ export type PublicationPayload = {
     slug?: string | null
     excerpt?: string | null
     cover_image_path?: string | null
+    cover_file_id?: number | null
+    cover_alt_text?: string | null
+    cover_caption?: string | null
+    seo_title?: string | null
+    seo_description?: string | null
+    canonical_url?: string | null
     reading_time_minutes?: number | null
     tags?: string[]
     attachment_ids?: number[]
@@ -139,3 +156,7 @@ export type PopularPublicationsResponse = {
         total: number
     }
 }
+
+export type PublicationQualityReport = { score: number; blockers: string[]; errors?: string[]; warnings: string[]; suggestions: string[] }
+export type PublicationVersion = { id: number; version_number: number; title: string; excerpt?: string | null; editor_state?: Record<string, unknown> | null; change_summary?: string | null; created_at?: string | null }
+export type PublicationTemplate = { id: number; title: string; slug: string; description?: string | null; category: string; blocks_schema: PublicationPayload["blocks"]; tags?: string[]; is_system: boolean }

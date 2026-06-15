@@ -219,6 +219,17 @@ export function PublicationBlockRenderer({ block, compact = false }: Publication
             )
         }
 
+        case "table": {
+            const rows = Array.isArray(content.rows) ? content.rows as string[][] : [["Параметр", "Значение"], ["SLA", "99.9%"]]
+            return <div className="overflow-hidden rounded-3xl border"><table className="w-full text-sm"><tbody>{rows.map((row, rowIndex) => <tr key={rowIndex} className="border-b last:border-0">{row.map((cell, cellIndex) => rowIndex === 0 ? <th key={cellIndex} className="bg-muted/60 p-3 text-left font-semibold">{cell}</th> : <td key={cellIndex} className="p-3 text-muted-foreground">{cell}</td>)}</tr>)}</tbody></table></div>
+        }
+
+        case "diagram": {
+            const source = getString(content.source)
+            if (!source) return null
+            return <div className="rounded-3xl border bg-card p-4"><p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Mermaid diagram</p><pre className="overflow-x-auto text-sm"><code>{source}</code></pre>{getString(content.caption) ? <p className="mt-2 text-center text-xs text-muted-foreground">{getString(content.caption)}</p> : null}</div>
+        }
+
         case "divider":
             return <div className={compact ? "h-px bg-border" : "my-8 h-px bg-border"} />
 

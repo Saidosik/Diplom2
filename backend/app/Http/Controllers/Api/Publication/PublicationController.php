@@ -14,6 +14,12 @@ use App\Models\Reaction;
 use App\Models\Tag;
 use App\Models\ContentAttachment;
 use App\Models\UserFile;
+use App\Models\PublicationVersion;
+use App\Models\PublicationTemplate;
+use App\Models\PublicationLock;
+use App\Models\PublicationAiSuggestion;
+use App\Services\PublicationQualityAnalyzer;
+use App\Services\PublicationMarkdownConverter;
 use App\Services\Community\CommunityActivityService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -164,6 +170,12 @@ class PublicationController extends Controller
                 'slug' => $this->makeUniqueSlug($data['slug'] ?? $data['title']),
                 'excerpt' => $this->normalizeExcerpt($data),
                 'cover_image_path' => $data['cover_image_path'] ?? null,
+                'cover_file_id' => $data['cover_file_id'] ?? null,
+                'cover_alt_text' => $data['cover_alt_text'] ?? null,
+                'cover_caption' => $data['cover_caption'] ?? null,
+                'seo_title' => $data['seo_title'] ?? null,
+                'seo_description' => $data['seo_description'] ?? null,
+                'canonical_url' => $data['canonical_url'] ?? null,
                 'reading_time_minutes' => $this->resolveReadingTime($data),
                 'published_at' => $status === PublicationStatus::Published ? now() : null,
             ]);
@@ -174,6 +186,8 @@ class PublicationController extends Controller
 
             return $publication;
         });
+
+        $this->createVersion($publication, (int) $request->user()->id, $publication->status === PublicationStatus::Published ? 'Публикация' : 'Ручное сохранение');
 
         app(\App\Services\Ai\AiIndexingDispatcher::class)->queue('publication', (int) $publication->id, false, $request->user()->id);
 
@@ -228,6 +242,12 @@ class PublicationController extends Controller
                 'slug' => $this->makeUniqueSlug($data['slug'] ?? $publication->slug ?? $data['title'], $publication->id),
                 'excerpt' => $this->normalizeExcerpt($data),
                 'cover_image_path' => $data['cover_image_path'] ?? null,
+                'cover_file_id' => $data['cover_file_id'] ?? null,
+                'cover_alt_text' => $data['cover_alt_text'] ?? null,
+                'cover_caption' => $data['cover_caption'] ?? null,
+                'seo_title' => $data['seo_title'] ?? null,
+                'seo_description' => $data['seo_description'] ?? null,
+                'canonical_url' => $data['canonical_url'] ?? null,
                 'reading_time_minutes' => $this->resolveReadingTime($data),
                 'published_at' => $status === PublicationStatus::Published
                     ? ($publication->published_at ?? now())
@@ -240,6 +260,8 @@ class PublicationController extends Controller
 
             return $publication;
         });
+
+        $this->createVersion($publication, (int) $request->user()->id, $publication->status === PublicationStatus::Published ? 'Публикация' : 'Ручное сохранение');
 
         app(\App\Services\Ai\AiIndexingDispatcher::class)->queue('publication', (int) $publication->id, true, $request->user()->id);
 
@@ -281,6 +303,56 @@ class PublicationController extends Controller
             'message' => 'Публикация удалена.',
         ]);
     }
+
+
+    public function createDraftIfNotExists(Request $request)
+    {
+        $draft = Publication::query()->firstOrCreate(
+            ['author_id' => $request->user()->id, 'status' => PublicationStatus::Draft->value, 'title' => 'Новый черновик'],
+            ['type' => PublicationType::Article->value, 'slug' => $this->makeUniqueSlug('new-draft'), 'excerpt' => null, 'reading_time_minutes' => 1, 'editor_state' => ['blocks' => []], 'autosave_version' => 0]
+        );
+        return new PublicationResource($draft->load(['author','tags','blocks','attachments.userFile']));
+    }
+
+    public function autosave(Request $request, Publication $publication)
+    {
+        $this->authorizePublication($request, $publication);
+        $data = $request->validate(['autosave_version'=>['required','integer','min:0'],'editor_state'=>['required','array'],'title'=>['nullable','string','max:180'],'excerpt'=>['nullable','string','max:1000'],'blocks'=>['nullable','array'],'tags'=>['nullable','array']]);
+        if ((int)$data['autosave_version'] !== (int)$publication->autosave_version) {
+            return response()->json(['message'=>'Конфликт версии','current_version'=>$publication->autosave_version], 409);
+        }
+        $publication->fill(['title'=>$data['title'] ?: $publication->title, 'excerpt'=>$data['excerpt'] ?? $publication->excerpt, 'editor_state'=>$data['editor_state'], 'autosave_version'=>$publication->autosave_version + 1, 'last_autosaved_at'=>now()])->save();
+        if (!empty($data['blocks'])) $this->syncBlocks($publication, $data['blocks']);
+        if (array_key_exists('tags',$data)) $this->syncTags($publication, $data['tags'] ?? []);
+        return response()->json(['data'=>['id'=>$publication->id,'autosave_version'=>$publication->autosave_version,'last_autosaved_at'=>$publication->last_autosaved_at]]);
+    }
+
+    public function drafts(Request $request) { return PublicationResource::collection(Publication::query()->where('author_id',$request->user()->id)->where('status',PublicationStatus::Draft->value)->with(['author','tags','blocks'])->latest('updated_at')->paginate(24)); }
+    public function duplicateDraft(Request $request, Publication $publication) { $this->authorizePublication($request,$publication); $copy=$publication->replicate(['slug','published_at']); $copy->title=$publication->title.' — копия'; $copy->slug=$this->makeUniqueSlug($copy->title); $copy->status=PublicationStatus::Draft->value; $copy->published_at=null; $copy->save(); foreach($publication->blocks as $b) $copy->blocks()->create($b->only(['type','sort_order','content'])); return new PublicationResource($copy->load(['author','tags','blocks'])); }
+    public function publishDraft(Request $request, Publication $publication, CommunityActivityService $community) { $this->authorizePublication($request,$publication); $check=$this->prepublishCheck($request,$publication)->getData(true); if(!empty($check['blockers'])) return response()->json($check,422); $publication->update(['status'=>PublicationStatus::Published->value,'published_at'=>$publication->published_at ?? now()]); $this->createVersion($publication,(int)$request->user()->id,'Публикация черновика'); return new PublicationResource($publication->load(['author','tags','blocks'])); }
+
+    public function versions(Request $request, Publication $publication) { $this->authorizePublication($request,$publication); return response()->json(['data'=>$publication->versions()->get()]); }
+    public function version(Request $request, Publication $publication, int $version) { $this->authorizePublication($request,$publication); return response()->json(['data'=>$publication->versions()->where('version_number',$version)->firstOrFail()]); }
+    public function restoreVersion(Request $request, Publication $publication, int $version) { $this->authorizePublication($request,$publication); $v=$publication->versions()->where('version_number',$version)->firstOrFail(); $publication->update(['title'=>$v->title,'excerpt'=>$v->excerpt,'cover_image_path'=>$v->cover_image_path,'editor_state'=>$v->editor_state]); $this->syncBlocks($publication, $v->editor_state['blocks'] ?? []); $this->syncTags($publication, $v->tags ?? []); return new PublicationResource($publication->load(['author','tags','blocks'])); }
+
+    public function analyzeQuality(Request $request, PublicationQualityAnalyzer $analyzer) { return response()->json($analyzer->analyze($request->all())); }
+    public function prepublishCheck(Request $request, Publication $publication, ?PublicationQualityAnalyzer $analyzer=null) { $this->authorizePublication($request,$publication); $analyzer ??= app(PublicationQualityAnalyzer::class); $payload=['title'=>$publication->title,'excerpt'=>$publication->excerpt,'tags'=>$publication->tags()->pluck('name')->all(),'blocks'=>$publication->blocks()->get()->map->only(['type','content'])->all()]; $quality=$analyzer->analyze($payload); return response()->json(['blockers'=>$quality['blockers'],'warnings'=>$quality['warnings'],'suggestions'=>$quality['suggestions'],'summary'=>['quality_score'=>$quality['score'],'attachments'=>$publication->attachments()->count()]]); }
+    public function exportMarkdown(Request $request, Publication $publication, PublicationMarkdownConverter $converter) { $this->authorizePublication($request,$publication); return response($converter->export(['title'=>$publication->title,'blocks'=>$publication->blocks()->get()->map->only(['type','content'])->all()]),200,['Content-Type'=>'text/markdown']); }
+    public function importMarkdown(Request $request, PublicationMarkdownConverter $converter) { $data=$request->validate(['markdown'=>['required','string']]); return response()->json(['data'=>['blocks'=>$converter->import($data['markdown'])]]); }
+
+    public function templates(Request $request) { $this->seedSystemTemplates(); return response()->json(['data'=>PublicationTemplate::query()->where(fn($q)=>$q->where('is_system',true)->orWhere('user_id',$request->user()->id))->latest('is_system')->get()]); }
+    public function storeTemplate(Request $request) { $d=$request->validate(['title'=>'required|string|max:120','description'=>'nullable|string','category'=>'nullable|string','blocks_schema'=>'required|array','tags'=>'nullable|array']); $d['user_id']=$request->user()->id; $d['slug']=$this->makeUniqueTagSlug($d['title']); return response()->json(['data'=>PublicationTemplate::create($d)],201); }
+    public function destroyTemplate(Request $request, PublicationTemplate $template) { abort_unless(!$template->is_system && $template->user_id===$request->user()->id,403); $template->delete(); return response()->json(['message'=>'Шаблон удалён.']); }
+    public function applyTemplate(Request $request, PublicationTemplate $template) { abort_unless($template->is_system || $template->user_id===$request->user()->id,403); return response()->json(['data'=>['blocks'=>$template->blocks_schema,'tags'=>$template->tags ?? []]]); }
+
+    public function acquireLock(Request $request, Publication $publication) { $this->authorizePublication($request,$publication); $lock=PublicationLock::updateOrCreate(['publication_id'=>$publication->id],['user_id'=>$request->user()->id,'locked_until'=>now()->addMinutes(2)]); return response()->json(['data'=>$lock]); }
+    public function releaseLock(Request $request, Publication $publication) { PublicationLock::where('publication_id',$publication->id)->where('user_id',$request->user()->id)->delete(); return response()->json(['message'=>'Lock released']); }
+
+    public function aiCopilot(Request $request) { $d=$request->validate(['publication_id'=>'nullable|integer','type'=>'required|string','payload'=>'nullable|array']); $payload=['text'=>'AI Copilot подготовил черновую рекомендацию для действия '.$d['type'],'patch'=>$d['payload'] ?? []]; $s=PublicationAiSuggestion::create(['publication_id'=>$d['publication_id']??null,'user_id'=>$request->user()->id,'type'=>$d['type'],'payload'=>$payload]); return response()->json(['data'=>$s],201); }
+    public function resolveAiSuggestion(Request $request, PublicationAiSuggestion $suggestion) { abort_unless($suggestion->user_id===$request->user()->id,403); $d=$request->validate(['status'=>'required|in:accepted,rejected']); $suggestion->update(['status'=>$d['status']]); return response()->json(['data'=>$suggestion]); }
+
+    private function createVersion(Publication $publication, int $userId, string $summary): PublicationVersion { $num=(int)$publication->versions()->max('version_number')+1; return PublicationVersion::create(['publication_id'=>$publication->id,'user_id'=>$userId,'title'=>$publication->title,'excerpt'=>$publication->excerpt,'tags'=>$publication->tags()->pluck('name')->all(),'editor_state'=>['blocks'=>$publication->blocks()->get()->map->only(['type','sort_order','content'])->all()],'cover_image_path'=>$publication->cover_image_path,'attachment_ids'=>$publication->attachments()->pluck('user_file_id')->all(),'version_number'=>$num,'change_summary'=>$summary]); }
+    private function seedSystemTemplates(): void { foreach(['Статья','Гайд','Туториал','Разбор ошибки','DevOps runbook','Laravel guide','API documentation','Q&A recap','Сравнение технологий','Чеклист'] as $title) PublicationTemplate::firstOrCreate(['user_id'=>null,'slug'=>$this->makeUniqueTagSlug($title)],['title'=>$title,'category'=>'system','is_system'=>true,'blocks_schema'=>[['type'=>'heading','sort_order'=>0,'content'=>['text'=>$title,'level'=>2]],['type'=>'paragraph','sort_order'=>1,'content'=>['text'=>'Ключевая идея материала.']]],'tags'=>[]]); }
 
     private function authorizePublication(Request $request, Publication $publication): void
     {

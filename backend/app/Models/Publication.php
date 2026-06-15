@@ -20,7 +20,18 @@ use Illuminate\Database\Eloquent\SoftDeletes;
         'excerpt',
         'status',
         'cover_image_path',
+        'cover_file_id',
+        'cover_alt_text',
+        'cover_caption',
         'reading_time_minutes',
+        'last_autosaved_at',
+        'editor_state',
+        'autosave_version',
+        'seo_title',
+        'seo_description',
+        'canonical_url',
+        'og_image_file_id',
+        'og_image_path',
         'published_at',)]
 
 class Publication extends Model
@@ -34,6 +45,9 @@ class Publication extends Model
             'status' => PublicationStatus::class,
             'published_at' => 'datetime',
             'reading_time_minutes' => 'integer',
+            'last_autosaved_at' => 'datetime',
+            'editor_state' => 'array',
+            'autosave_version' => 'integer',
         ];
     }
 
@@ -71,6 +85,21 @@ class Publication extends Model
     public function savedItems(): MorphMany
     {
         return $this->morphMany(SavedItem::class, 'saveable');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(PublicationVersion::class)->latest('version_number');
+    }
+
+    public function studioAttachments(): HasMany
+    {
+        return $this->hasMany(PublicationAttachment::class)->orderBy('sort_order');
+    }
+
+    public function snippets(): HasMany
+    {
+        return $this->hasMany(PublicationSnippet::class)->orderBy('sort_order');
     }
 
     public function attachments(): MorphMany

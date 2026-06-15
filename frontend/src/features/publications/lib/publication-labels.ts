@@ -31,6 +31,8 @@ export const publicationBlockTypeLabels: Record<PublicationBlockType, string> = 
     warning: "Предупреждение",
     link: "Ссылка",
     divider: "Разделитель",
+    table: "Таблица",
+    diagram: "Mermaid/Diagram",
 }
 
 export function formatPublicationDate(value?: string | null) {
