@@ -18,7 +18,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-#[Fillable(['name', 'email', 'password', 'reputation_score', 'avatar', 'cover_url', 'headline', 'bio', 'location', 'direction', 'website_url', 'github_url', 'profile_visibility', 'show_email_publicly', 'show_friends_publicly', 'show_files_publicly', 'show_activity_publicly', 'email_verified_at', 'privacy_policy_accepted_at', 'privacy_policy_page_updated_at', 'presence_status', 'last_seen_at', 'presence_updated_at'])]
+#[Fillable(['username', 'name', 'email', 'password', 'reputation_score', 'avatar', 'cover_url', 'headline', 'bio', 'location', 'direction', 'website_url', 'github_url', 'telegram_url', 'profile_visibility', 'show_email_publicly', 'show_friends_publicly', 'show_files_publicly', 'show_activity_publicly', 'email_verified_at', 'privacy_policy_accepted_at', 'privacy_policy_page_updated_at', 'presence_status', 'last_seen_at', 'presence_updated_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements JWTSubject, MustVerifyEmailContract
 {
@@ -43,6 +43,7 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmailContrac
             'show_friends_publicly' => 'boolean',
             'show_files_publicly' => 'boolean',
             'show_activity_publicly' => 'boolean',
+            'username' => 'string',
         ];
     }
 
@@ -115,6 +116,16 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmailContrac
     public function isStaff(): bool
     {
         return in_array($this->role, ['admin', 'moderator'], true);
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'id';
+    }
+
+    public function profilePins(): HasMany
+    {
+        return $this->pinnedItems();
     }
 
     public function getJWTIdentifier()
