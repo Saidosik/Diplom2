@@ -22,6 +22,7 @@ export type ProfileHubItem = {
     url?: string | null
     created_at?: string | null
     updated_at?: string | null
+    unlocked_at?: string | null
     pinned_at?: string | null
     saved_at?: string | null
     original_name?: string | null
