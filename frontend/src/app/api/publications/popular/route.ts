@@ -13,6 +13,8 @@ const MAX_LIMIT = 24
 const REVALIDATE_SECONDS = 60
 const AUTH_ERROR_STATUSES = new Set([401, 403])
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const requestedPeriod = searchParams.get("period") as PopularPublicationPeriod | null
@@ -39,9 +41,13 @@ export async function GET(request: NextRequest) {
 
             return NextResponse.json(payload, {
                 headers: token
-                    ? { "Cache-Control": "private, no-store" }
+                    ? {
+                        "Cache-Control": "private, no-store",
+                        "Vary": "Cookie, Authorization",
+                    }
                     : {
                         "Cache-Control": `public, s-maxage=${REVALIDATE_SECONDS}, stale-while-revalidate=${REVALIDATE_SECONDS * 2}`,
+                        "Vary": "Cookie, Authorization",
                     },
             })
         } catch (error) {
@@ -51,7 +57,10 @@ export async function GET(request: NextRequest) {
                 const payload = normalizePublicationsResponse(response.data, period)
 
                 return NextResponse.json(payload, {
-                    headers: { "Cache-Control": "private, no-store" },
+                    headers: {
+                        "Cache-Control": "private, no-store",
+                        "Vary": "Cookie, Authorization",
+                    },
                 })
             }
 
