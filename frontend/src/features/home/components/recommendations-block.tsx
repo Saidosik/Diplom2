@@ -21,6 +21,7 @@ export function RecommendationsBlock() {
     })
 
     const mode = recommendationsQuery.data?.mode ?? "guest"
+    const isSemantic = recommendationsQuery.data?.meta?.strategy?.includes("semantic") ?? false
     const recommendations = useMemo(
         () => (recommendationsQuery.data?.data ?? []).filter((item) => !hiddenKeys.includes(recommendationKey(item))).slice(0, 4),
         [hiddenKeys, recommendationsQuery.data?.data]
@@ -88,6 +89,9 @@ export function RecommendationsBlock() {
                                 ? "Подборка учитывает ваши теги, реакции, сохранения и подписки."
                                 : "Гостевая подборка показывает тренды, свежие материалы и вопросы без ответа."}
                         </p>
+                        {isSemantic ? (
+                            <p className="mt-1 text-xs font-medium text-primary">Подобрано по вашим интересам</p>
+                        ) : null}
                     </div>
                     <Badge variant="secondary">{mode === "personalized" ? "Для вас" : "Гость"}</Badge>
                 </CardHeader>

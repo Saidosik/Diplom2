@@ -20,7 +20,10 @@ use Illuminate\Support\Collection;
 
 class RecommendationService
 {
-    public function __construct(private readonly PublicationRankingService $rankingService) {}
+    public function __construct(
+        private readonly PublicationRankingService $rankingService,
+        private readonly SemanticRecommendationSource $semanticSource,
+    ) {}
 
     /** @return array{mode:string,data:Collection<int,array<string,mixed>>,meta:array<string,mixed>} */
     public function forRequest(Request $request, ?User $user, ?string $guestId = null): array
@@ -29,22 +32,35 @@ class RecommendationService
         $since = $this->periodStart($period);
         $profile = $this->userInterestProfile($user);
         $eventSignals = $this->applyEventSignals($profile, $user, $guestId);
+        $semantic = $this->semanticSource->candidates($user, $guestId, $profile);
+        $semanticCandidates = $semantic['candidates'];
+        $semanticSignals = $semantic['semantic_signals_count'];
         $mode = $user ? 'personalized' : 'guest';
         $strategy = $user
-            ? ($eventSignals > 0 ? 'personalized_events' : 'personalized')
-            : ($eventSignals > 0 ? 'guest_events' : 'guest_trending');
+            ? ($semanticSignals > 0 ? 'personalized_semantic' : ($eventSignals > 0 ? 'personalized_events' : 'personalized'))
+            : ($semanticSignals > 0 ? 'guest_semantic' : ($eventSignals > 0 ? 'guest_events' : 'guest_trending'));
+        $candidateSources = collect(['trending', 'tags'])
+            ->when($eventSignals > 0, fn ($sources) => $sources->push('events'))
+            ->when($semanticCandidates->isNotEmpty(), fn ($sources) => $sources->push('semantic'))
+            ->values()
+            ->all();
+        $popularPublications = $this->popularPublications($since, 18);
+        $popularQuestions = $this->popularQuestions($since, 18);
+        $popularPublications = $this->mergeSemanticPublications($popularPublications, $semanticCandidates);
+        $popularQuestions = $this->mergeSemanticQuestions($popularQuestions, $semanticCandidates);
 
         return [
             'mode' => $mode,
             'data' => $this->buildRecommendations(
-                $this->popularPublications($since, 18),
-                $this->popularQuestions($since, 18),
+                $popularPublications,
+                $popularQuestions,
                 $this->popularTags($since, 18),
                 $this->unansweredQuestions(8),
                 $user,
                 $profile,
                 $mode,
                 $request,
+                $semanticCandidates,
             ),
             'meta' => [
                 'period' => $period,
@@ -53,6 +69,8 @@ class RecommendationService
                 'followed_authors_count' => count($profile['author_ids']),
                 'signals_count' => $profile['signals_count'],
                 'strategy' => $strategy,
+                'semantic_signals_count' => $semanticSignals,
+                'candidate_sources' => $candidateSources,
             ],
         ];
     }
@@ -100,6 +118,68 @@ class RecommendationService
         ])->latest('published_at')->limit(80)->get()->sortByDesc(fn (IssueQuestion $q) => $this->questionScore($q))->values()->take($limit);
     }
 
+    /** @param Collection<int,array<string,mixed>> $semanticCandidates @return Collection<int,Publication> */
+    private function mergeSemanticPublications(Collection $publications, Collection $semanticCandidates): Collection
+    {
+        $existingIds = $publications->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $semanticIds = $semanticCandidates
+            ->where('type', RecommendationEvent::TARGET_PUBLICATION)
+            ->pluck('source_id')
+            ->map(fn ($id) => (int) $id)
+            ->diff($existingIds)
+            ->values()
+            ->all();
+
+        if ($semanticIds === []) {
+            return $publications;
+        }
+
+        $semanticPublications = Publication::query()
+            ->published()
+            ->with(['author', 'tags'])
+            ->withCount([
+                'comments',
+                'savedItems',
+                'reactions as likes_count' => fn (Builder $builder) => $builder->where('type', Reaction::LIKE),
+                'reactions as dislikes_count' => fn (Builder $builder) => $builder->where('type', Reaction::DISLIKE),
+            ])
+            ->whereIn('id', $semanticIds)
+            ->get();
+
+        return $publications->merge($semanticPublications)->unique('id')->values();
+    }
+
+    /** @param Collection<int,array<string,mixed>> $semanticCandidates @return Collection<int,IssueQuestion> */
+    private function mergeSemanticQuestions(Collection $questions, Collection $semanticCandidates): Collection
+    {
+        $existingIds = $questions->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $semanticIds = $semanticCandidates
+            ->where('type', RecommendationEvent::TARGET_QUESTION)
+            ->pluck('source_id')
+            ->map(fn ($id) => (int) $id)
+            ->diff($existingIds)
+            ->values()
+            ->all();
+
+        if ($semanticIds === []) {
+            return $questions;
+        }
+
+        $semanticQuestions = IssueQuestion::query()
+            ->published()
+            ->with(['author', 'tags'])
+            ->withCount([
+                'answers' => fn (Builder $builder) => $builder->published(),
+                'savedItems',
+                'reactions as likes_count' => fn (Builder $builder) => $builder->where('type', Reaction::LIKE),
+                'reactions as dislikes_count' => fn (Builder $builder) => $builder->where('type', Reaction::DISLIKE),
+            ])
+            ->whereIn('id', $semanticIds)
+            ->get();
+
+        return $questions->merge($semanticQuestions)->unique('id')->values();
+    }
+
     /** @return Collection<int,IssueQuestion> */
     public function unansweredQuestions(int $limit): Collection
     {
@@ -126,22 +206,25 @@ class RecommendationService
     }
 
     /** @param array<string,mixed> $profile @return Collection<int,array<string,mixed>> */
-    public function buildRecommendations(Collection $publications, Collection $questions, Collection $tags, Collection $unanswered, ?User $user, array $profile, string $mode, Request $request): Collection
+    public function buildRecommendations(Collection $publications, Collection $questions, Collection $tags, Collection $unanswered, ?User $user, array $profile, string $mode, Request $request, ?Collection $semanticCandidates = null): Collection
     {
+        $semanticCandidates ??= collect();
+        $semanticByKey = $semanticCandidates->keyBy(fn (array $candidate) => $candidate['type'] . ':' . $candidate['source_id']);
+
         $publicationRecommendations = $publications
             ->reject(fn (Publication $p) => in_array($p->id, $profile['disliked_publication_ids'], true) || in_array($p->id, $profile['hidden_publication_ids'], true))
             ->map(fn (Publication $p) => [
             'type' => 'publication', 'title' => $p->title, 'description' => $p->excerpt, 'href' => "/publications/{$p->slug}",
-            'reason' => $mode === 'guest' ? 'Трендовая свежая публикация сообщества' : $this->publicationReason($p, $profile, $user),
-            'score' => $this->publicationRecommendationScore($p, $profile, $user), 'item' => (new PublicationResource($p))->resolve($request),
+            'reason' => $this->recommendationReason('publication', $p->id, $semanticByKey) ?? ($mode === 'guest' ? 'Трендовая свежая публикация сообщества' : $this->publicationReason($p, $profile, $user)),
+            'score' => $this->publicationRecommendationScore($p, $profile, $user) + $this->semanticBoost('publication', $p->id, $semanticByKey), 'item' => (new PublicationResource($p))->resolve($request),
         ]);
 
         $questionRecommendations = $questions->merge($unanswered)->unique('id')
             ->reject(fn (IssueQuestion $q) => in_array($q->id, $profile['disliked_question_ids'], true) || in_array($q->id, $profile['hidden_question_ids'], true))
             ->map(fn (IssueQuestion $q) => [
             'type' => 'question', 'title' => $q->title, 'description' => $q->excerpt, 'href' => "/questions/{$q->slug}",
-            'reason' => $mode === 'guest' && ! $q->is_solved && (int) ($q->answers_count ?? 0) === 0 ? 'Вопрос без ответа: можно помочь первым' : $this->questionReason($q, $profile, $user),
-            'score' => $this->questionRecommendationScore($q, $profile, $user), 'item' => (new IssueQuestionResource($q))->resolve($request),
+            'reason' => $this->recommendationReason('question', $q->id, $semanticByKey) ?? ($mode === 'guest' && ! $q->is_solved && (int) ($q->answers_count ?? 0) === 0 ? 'Вопрос без ответа: можно помочь первым' : $this->questionReason($q, $profile, $user)),
+            'score' => $this->questionRecommendationScore($q, $profile, $user) + $this->semanticBoost('question', $q->id, $semanticByKey), 'item' => (new IssueQuestionResource($q))->resolve($request),
         ]);
 
         $tagRecommendations = $tags->map(fn (array $tag) => [
@@ -307,6 +390,26 @@ class RecommendationService
             $profile['author_weights'][(int) $authorId] = ($profile['author_weights'][(int) $authorId] ?? 0) + $weight;
             $profile['author_ids'][] = (int) $authorId;
         }
+    }
+
+    /** @param Collection<string,array<string,mixed>> $semanticByKey */
+    private function semanticBoost(string $type, int $id, Collection $semanticByKey): int
+    {
+        $candidate = $semanticByKey->get($type . ':' . $id);
+
+        if (! $candidate) {
+            return 0;
+        }
+
+        return (int) round(((float) ($candidate['score'] ?? 0.0)) * 30);
+    }
+
+    /** @param Collection<string,array<string,mixed>> $semanticByKey */
+    private function recommendationReason(string $type, int $id, Collection $semanticByKey): ?string
+    {
+        $candidate = $semanticByKey->get($type . ':' . $id);
+
+        return $candidate ? (string) ($candidate['reason'] ?? 'Связано с вашими интересами по смыслу') : null;
     }
 
     /** @param array<string,mixed> $profile */

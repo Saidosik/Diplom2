@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiKnowledgeChunk;
+use App\Models\AiKnowledgeDocument;
 use App\Models\IssueQuestion;
 use App\Models\Publication;
 use App\Models\Reaction;
@@ -180,11 +182,13 @@ class RecommendationsEndpointTest extends TestCase
             'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_OPEN_TAG),
         ]);
 
-        $this->withHeader('X-Vector-Guest-Id', 'guest-signal')->getJson('/api/recommendations')
+        $response = $this->withHeader('X-Vector-Guest-Id', 'guest-signal')->getJson('/api/recommendations')
             ->assertOk()
             ->assertJsonPath('mode', 'guest')
             ->assertJsonPath('meta.strategy', 'guest_events')
             ->assertJson(fn ($json) => $json->where('meta.signals_count', fn ($count) => $count > 0)->etc());
+
+        $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
     }
 
     public function test_authenticated_user_events_affect_personalized_recommendations(): void
@@ -218,6 +222,129 @@ class RecommendationsEndpointTest extends TestCase
         $this->assertNotNull($regular);
     }
 
+
+    public function test_authenticated_user_with_saved_publication_gets_semantic_recommendations(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $seed = $this->publication(['title' => 'Saved Laravel queues', 'slug' => 'saved-laravel-queues']);
+        $similar = $this->publication(['title' => 'Semantic Laravel workers', 'slug' => 'semantic-laravel-workers', 'published_at' => now()->subDays(10)]);
+        $this->indexedChunk('publication', $seed->id, 'Saved Laravel queues', [1, 0, 0]);
+        $this->indexedChunk('publication', $similar->id, 'Semantic Laravel workers', [0.98, 0.02, 0]);
+        RecommendationEvent::create([
+            'user_id' => $user->id,
+            'event_type' => RecommendationEvent::EVENT_SAVE,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $seed->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_SAVE),
+        ]);
+
+        $data = $this->withToken(JWTAuth::fromUser($user))->getJson('/api/recommendations')
+            ->assertOk()
+            ->assertJsonPath('meta.strategy', 'personalized_semantic')
+            ->assertJson(fn ($json) => $json
+                ->where('meta.semantic_signals_count', fn ($count) => $count > 0)
+                ->has('meta.candidate_sources')
+                ->etc())
+            ->json('data');
+
+        $this->assertTrue(collect($data)->pluck('item.slug')->contains('semantic-laravel-workers'));
+    }
+
+    public function test_guest_with_click_and_long_view_events_gets_guest_semantic_strategy(): void
+    {
+        $seed = $this->publication(['title' => 'Clicked architecture', 'slug' => 'clicked-architecture']);
+        $similar = $this->question(['title' => 'Similar architecture question', 'slug' => 'similar-architecture-question', 'published_at' => now()->subDays(8)]);
+        $this->indexedChunk('publication', $seed->id, 'Clicked architecture', [0, 1, 0]);
+        $this->indexedChunk('question', $similar->id, 'Similar architecture question', [0.01, 0.99, 0]);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-semantic',
+            'event_type' => RecommendationEvent::EVENT_CLICK,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $seed->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_CLICK),
+        ]);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-semantic',
+            'event_type' => RecommendationEvent::EVENT_LONG_VIEW,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $seed->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_LONG_VIEW),
+        ]);
+
+        $this->withHeader('X-Vector-Guest-Id', 'guest-semantic')->getJson('/api/recommendations')
+            ->assertOk()
+            ->assertJsonPath('mode', 'guest')
+            ->assertJsonPath('meta.strategy', 'guest_semantic')
+            ->assertJson(fn ($json) => $json->where('meta.semantic_signals_count', fn ($count) => $count > 0)->etc());
+    }
+
+    public function test_hidden_semantic_similar_item_is_excluded(): void
+    {
+        $seed = $this->publication(['title' => 'Seed hidden semantic', 'slug' => 'seed-hidden-semantic']);
+        $hidden = $this->publication(['title' => 'Hidden semantic match', 'slug' => 'hidden-semantic-match']);
+        $this->publication(['title' => 'Visible semantic fallback', 'slug' => 'visible-semantic-fallback']);
+        $this->indexedChunk('publication', $seed->id, 'Seed hidden semantic', [0, 0, 1]);
+        $this->indexedChunk('publication', $hidden->id, 'Hidden semantic match', [0, 0.01, 0.99]);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-hidden-semantic',
+            'event_type' => RecommendationEvent::EVENT_CLICK,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $seed->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_CLICK),
+        ]);
+        RecommendationEvent::create([
+            'guest_id' => 'guest-hidden-semantic',
+            'event_type' => RecommendationEvent::EVENT_HIDE,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $hidden->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_HIDE),
+        ]);
+
+        $slugs = collect($this->withHeader('X-Vector-Guest-Id', 'guest-hidden-semantic')->getJson('/api/recommendations')->json('data'))->pluck('item.slug');
+
+        $this->assertFalse($slugs->contains('hidden-semantic-match'));
+    }
+
+    public function test_fallback_works_when_no_embeddings_exist(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $publication = $this->publication(['title' => 'No embedding publication', 'slug' => 'no-embedding-publication']);
+        RecommendationEvent::create([
+            'user_id' => $user->id,
+            'event_type' => RecommendationEvent::EVENT_LIKE,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $publication->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_LIKE),
+        ]);
+
+        $this->withToken(JWTAuth::fromUser($user))->getJson('/api/recommendations')
+            ->assertOk()
+            ->assertJsonPath('mode', 'personalized')
+            ->assertJsonPath('meta.strategy', 'personalized_events')
+            ->assertJsonStructure(['mode', 'data', 'meta']);
+    }
+
+    public function test_recommendation_cache_headers_for_semantic_and_shared_guest(): void
+    {
+        $sharedGuestResponse = $this->getJson('/api/recommendations')->assertOk();
+        $this->assertStringContainsString('public', $sharedGuestResponse->headers->get('Cache-Control'));
+        $sharedGuestResponse->assertHeader('Vary', 'Cookie, Authorization');
+
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $publication = $this->publication(['title' => 'Cache publication', 'slug' => 'cache-publication']);
+        $this->indexedChunk('publication', $publication->id, 'Cache publication', [1, 0, 1]);
+        RecommendationEvent::create([
+            'user_id' => $user->id,
+            'event_type' => RecommendationEvent::EVENT_CLICK,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => $publication->id,
+            'weight' => RecommendationEvent::weightFor(RecommendationEvent::EVENT_CLICK),
+        ]);
+
+        $authResponse = $this->withToken(JWTAuth::fromUser($user))->getJson('/api/recommendations')->assertOk();
+        $this->assertStringContainsString('no-store', $authResponse->headers->get('Cache-Control'));
+    }
+
     public function test_event_post_always_returns_no_store(): void
     {
         $response = $this->postJson('/api/recommendations/events', [
@@ -226,6 +353,36 @@ class RecommendationsEndpointTest extends TestCase
         ])->assertOk();
 
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+    }
+
+
+    private function indexedChunk(string $sourceType, int $sourceId, string $title, array $embedding): AiKnowledgeChunk
+    {
+        $document = AiKnowledgeDocument::create([
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'title' => $title,
+            'url' => $sourceType === 'publication' ? '/publications/' . fake()->slug() : '/questions/' . fake()->slug(),
+            'status' => 'indexed',
+            'tags' => [],
+            'metadata' => [],
+            'indexed_at' => now(),
+            'chunks_count' => 1,
+        ]);
+
+        return AiKnowledgeChunk::create([
+            'ai_knowledge_document_id' => $document->id,
+            'source_type' => $sourceType,
+            'source_id' => $sourceId,
+            'chunk_index' => 0,
+            'title' => $title,
+            'content' => $title,
+            'search_text' => $title,
+            'embedding' => $embedding,
+            'token_count' => 1,
+            'metadata' => [],
+            'indexed_at' => now(),
+        ]);
     }
 
     private function publication(array $attributes = []): Publication
