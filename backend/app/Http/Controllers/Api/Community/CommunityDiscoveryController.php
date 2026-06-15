@@ -15,6 +15,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Services\Community\CommunityActivityService;
 use App\Services\PublicationRankingService;
+use App\Services\Recommendations\RecommendationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,19 +27,19 @@ use Throwable;
 
 class CommunityDiscoveryController extends Controller
 {
-    public function discovery(Request $request): JsonResponse
+    public function discovery(Request $request, RecommendationService $recommendationService): JsonResponse
     {
         $user = $this->attachOptionalUser($request);
         $period = $this->period($request);
         $since = $this->periodStart($period);
-        $profile = $this->userInterestProfile($user);
+        $recommendationPayload = $recommendationService->forRequest($request, $user);
 
         $popularPublications = $this->popularPublicationsCollection($since, 12);
         $popularQuestions = $this->popularQuestions($since, 12);
         $unansweredQuestions = $this->unansweredQuestions(6);
         $topUsers = $this->topUsers(8);
         $popularTags = $this->popularTags($since, 16);
-        $recommendations = $this->buildRecommendations($popularPublications, $popularQuestions, $popularTags, $user, $profile);
+        $recommendations = $recommendationPayload['data'];
 
         return response()->json([
             'period' => $period,
@@ -53,9 +54,9 @@ class CommunityDiscoveryController extends Controller
             'top_users' => $topUsers,
             'popular_tags' => $popularTags,
             'recommendation_meta' => [
-                'matched_tags' => $this->matchedTagsPayload($profile),
-                'followed_authors_count' => count($profile['author_ids']),
-                'signals_count' => $profile['signals_count'],
+                'matched_tags' => $recommendationPayload['meta']['matched_tags'],
+                'followed_authors_count' => $recommendationPayload['meta']['followed_authors_count'],
+                'signals_count' => $recommendationPayload['meta']['signals_count'],
             ],
         ]);
     }
@@ -130,27 +131,19 @@ class CommunityDiscoveryController extends Controller
         ]);
     }
 
-    public function recommendations(Request $request): JsonResponse
+    public function recommendations(Request $request, RecommendationService $recommendationService): JsonResponse
     {
         $user = $this->attachOptionalUser($request);
-        $period = $this->period($request);
-        $since = $this->periodStart($period);
-        $profile = $this->userInterestProfile($user);
+        $payload = $recommendationService->forRequest($request, $user);
 
         return response()->json([
-            'period' => $period,
+            'period' => $payload['meta']['period'],
             'personalized' => $user !== null,
-            'data' => $this->buildRecommendations(
-                $this->popularPublicationsCollection($since, 18),
-                $this->popularQuestions($since, 18),
-                $this->popularTags($since, 18),
-                $user,
-                $profile,
-            ),
+            'data' => $payload['data'],
             'meta' => [
-                'matched_tags' => $this->matchedTagsPayload($profile),
-                'followed_authors_count' => count($profile['author_ids']),
-                'signals_count' => $profile['signals_count'],
+                'matched_tags' => $payload['meta']['matched_tags'],
+                'followed_authors_count' => $payload['meta']['followed_authors_count'],
+                'signals_count' => $payload['meta']['signals_count'],
             ],
         ]);
     }
