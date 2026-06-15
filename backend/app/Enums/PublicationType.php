@@ -8,6 +8,10 @@ enum PublicationType: string
     case News = 'news';
     case Post = 'post';
     case Guide = 'guide';
+    case Tutorial = 'tutorial';
+    case Opinion = 'opinion';
+    case Release = 'release';
+    case QuestionRelated = 'question_related';
 
     public function label(): string
     {
@@ -16,6 +20,10 @@ enum PublicationType: string
             self::News => 'Новость',
             self::Post => 'Пост',
             self::Guide => 'Гайд',
+            self::Tutorial => 'Туториал',
+            self::Opinion => 'Мнение',
+            self::Release => 'Релиз',
+            self::QuestionRelated => 'Q&A материал',
         };
     }
 

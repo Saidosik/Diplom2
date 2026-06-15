@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Http\Resources\Issue\TagResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Services\PublicationRankingService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -18,7 +19,9 @@ class PublicationResource extends JsonResource
         return [
             'id' => $this->id,
             'type' => $this->type?->value,
+            'content_type' => $this->type?->value,
             'type_label' => $this->type?->label(),
+            'content_type_label' => $this->type?->label(),
             'status' => $this->status?->value,
             'status_label' => $this->status?->label(),
             'title' => $this->title,
@@ -36,12 +39,20 @@ class PublicationResource extends JsonResource
             'seo_description' => $this->seo_description,
             'canonical_url' => $this->canonical_url,
             'reading_time_minutes' => $this->reading_time_minutes,
+            'reading_time' => $this->reading_time_minutes,
+            'views_count' => (int) ($this->views_count ?? 0),
+            'rating' => app(PublicationRankingService::class)->rating($this->resource),
+            'score' => (float) ($this->score ?? app(PublicationRankingService::class)->score($this->resource)),
+            'rank_position' => $this->when(isset($this->rank_position), (int) ($this->rank_position ?? 0)),
+            'reason_label' => $this->reason_label ?? app(PublicationRankingService::class)->reasonLabel($this->resource, (string) $request->query('period', 'week')),
             'likes_count' => (int) ($this->likes_count ?? 0),
             'dislikes_count' => (int) ($this->dislikes_count ?? 0),
             'comments_count' => (int) ($this->comments_count ?? 0),
             'saved_count' => (int) ($this->saved_items_count ?? $this->savedItems_count ?? 0),
             'my_reaction' => $this->myReaction(),
             'is_saved' => $this->isSaved($request),
+            'is_saved_by_me' => $this->isSaved($request),
+            'is_liked_by_me' => $this->myReaction() === 'like',
             'published_at' => $this->published_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

@@ -12,15 +12,15 @@ const MAX_LIMIT = 24
 const REVALIDATE_SECONDS = 120
 
 const getCachedPopularPublications = unstable_cache(
-    async (period: PopularPublicationPeriod, limit: number, page: number) => {
+    async (period: PopularPublicationPeriod, limit: number, page: number, sort: string, type: string) => {
         const api = createLaravelApi()
         const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", {
-            params: { period, limit, page },
+            params: { period, limit, page, sort, type: type === "all" ? undefined : type },
         })
 
         return response.data
     },
-    ["popular-publications"],
+    ["popular-publications-v2"],
     { revalidate: REVALIDATE_SECONDS }
 )
 
@@ -30,9 +30,11 @@ export async function GET(request: NextRequest) {
     const period = requestedPeriod && periods.includes(requestedPeriod) ? requestedPeriod : DEFAULT_PERIOD
     const limit = normalizePositiveInt(searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT)
     const page = normalizePositiveInt(searchParams.get("page"), 1, Number.MAX_SAFE_INTEGER)
+    const sort = searchParams.get("sort") || "popular"
+    const type = searchParams.get("type") || "all"
 
     try {
-        const payload = await getCachedPopularPublications(period, limit, page)
+        const payload = await getCachedPopularPublications(period, limit, page, sort, type)
 
         return NextResponse.json(payload, {
             headers: {

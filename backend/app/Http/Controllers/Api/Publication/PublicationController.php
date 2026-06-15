@@ -10,6 +10,7 @@ use App\Http\Requests\Publication\StorePublicationRequest;
 use App\Http\Requests\Publication\UpdatePublicationRequest;
 use App\Http\Resources\PublicationResource;
 use App\Models\Publication;
+use App\Models\PublicationView;
 use App\Models\Reaction;
 use App\Models\Tag;
 use App\Models\ContentAttachment;
@@ -21,6 +22,7 @@ use App\Models\PublicationAiSuggestion;
 use App\Services\PublicationQualityAnalyzer;
 use App\Services\PublicationMarkdownConverter;
 use App\Services\Community\CommunityActivityService;
+use App\Services\PublicationRankingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,9 +67,21 @@ class PublicationController extends Controller
         }
 
 
+        if ($period = (string) $request->query('period', '')) {
+            if (in_array($period, ['day', 'week', 'month'], true)) {
+                $query->where('published_at', '>=', match ($period) {
+                    'day' => now()->subDay(),
+                    'month' => now()->subMonth(),
+                    default => now()->subWeek(),
+                });
+            }
+        }
+
         match ((string) $request->query('sort', 'latest')) {
-            'popular' => $query->orderByDesc('likes_count')->orderByDesc('comments_count')->latest('published_at'),
+            'popular' => $query->orderByDesc('likes_count')->orderByDesc('comments_count')->orderByDesc('views_count')->latest('published_at'),
             'discussed' => $query->orderByDesc('comments_count')->latest('published_at'),
+            'rating' => $query->orderByDesc('likes_count')->orderBy('dislikes_count')->latest('published_at'),
+            'views' => $query->orderByDesc('views_count')->latest('published_at'),
             'saved' => $query->orderByDesc('saved_items_count')->latest('published_at'),
             default => $query->latest('published_at'),
         };
@@ -75,6 +89,46 @@ class PublicationController extends Controller
         $perPage = min(max((int) $request->query('per_page', 12), 1), 50);
 
         return PublicationResource::collection($query->paginate($perPage));
+    }
+
+    public function recordView(Request $request, string $publication): JsonResponse
+    {
+        $publicationModel = Publication::query()->published()->where('slug', $publication)->firstOrFail();
+        $user = $request->user();
+
+        if ($user && (int) $user->id === (int) $publicationModel->author_id) {
+            return response()->json(['views_count' => (int) $publicationModel->views_count, 'counted' => false, 'reason' => 'author_view']);
+        }
+
+        $ipHash = hash('sha256', (string) $request->ip());
+        $uaHash = hash('sha256', substr((string) $request->userAgent(), 0, 255));
+        $threshold = now()->subHours(6);
+
+        $recent = PublicationView::query()
+            ->where('publication_id', $publicationModel->id)
+            ->where('viewed_at', '>=', $threshold)
+            ->where(function (Builder $builder) use ($user, $ipHash, $uaHash) {
+                if ($user) {
+                    $builder->where('user_id', $user->id);
+                } else {
+                    $builder->where('ip_hash', $ipHash)->where('user_agent_hash', $uaHash);
+                }
+            })
+            ->exists();
+
+        if (! $recent) {
+            PublicationView::query()->create([
+                'publication_id' => $publicationModel->id,
+                'user_id' => $user?->id,
+                'ip_hash' => $ipHash,
+                'user_agent_hash' => $uaHash,
+                'viewed_at' => now(),
+            ]);
+            $publicationModel->increment('views_count');
+            $publicationModel->refresh();
+        }
+
+        return response()->json(['views_count' => (int) $publicationModel->views_count, 'counted' => ! $recent]);
     }
 
     public function myIndex(Request $request)

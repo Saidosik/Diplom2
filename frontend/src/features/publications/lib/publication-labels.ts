@@ -5,6 +5,10 @@ export const publicationTypeLabels: Record<PublicationType, string> = {
     news: "Новость",
     post: "Пост",
     guide: "Гайд",
+    tutorial: "Туториал",
+    opinion: "Мнение",
+    release: "Релиз",
+    question_related: "Q&A материал",
 }
 
 export const publicationStatusLabels: Record<PublicationStatus, string> = {
