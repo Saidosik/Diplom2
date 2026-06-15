@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 import { isAxiosError } from "axios"
 
@@ -7,22 +6,9 @@ import type { PopularPublicationPeriod, PopularPublicationsResponse } from "@/fe
 
 const periods: PopularPublicationPeriod[] = ["day", "week", "month", "all"]
 const DEFAULT_PERIOD: PopularPublicationPeriod = "week"
-const DEFAULT_LIMIT = 6
+const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 24
-const REVALIDATE_SECONDS = 120
-
-const getCachedPopularPublications = unstable_cache(
-    async (period: PopularPublicationPeriod, limit: number, page: number, sort: string, type: string) => {
-        const api = createLaravelApi()
-        const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", {
-            params: { period, limit, page, sort, type: type === "all" ? undefined : type },
-        })
-
-        return response.data
-    },
-    ["popular-publications-v2"],
-    { revalidate: REVALIDATE_SECONDS }
-)
+const REVALIDATE_SECONDS = 60
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
@@ -34,9 +20,18 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") || "all"
 
     try {
-        const payload = await getCachedPopularPublications(period, limit, page, sort, type)
+        const api = createLaravelApi()
+        const response = await api.get<PopularPublicationsResponse>("/community/popular-publications", {
+            params: {
+                period,
+                limit,
+                page,
+                sort,
+                type: type === "all" ? undefined : type,
+            },
+        })
 
-        return NextResponse.json(payload, {
+        return NextResponse.json(response.data, {
             headers: {
                 "Cache-Control": `public, s-maxage=${REVALIDATE_SECONDS}, stale-while-revalidate=${REVALIDATE_SECONDS * 2}`,
             },

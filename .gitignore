@@ -5,6 +5,7 @@
 !.env.docker.example
 !.env.production.example
 *.zip
+~$ЗАЩИТА.pptx
 # Production runtime data
 backups/
 logs/
