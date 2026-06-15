@@ -98,6 +98,20 @@ export type CommunityRecommendation = {
     item?: Publication | IssueQuestion | CommunityTag
 }
 
+export type RecommendationMode = "guest" | "personalized"
+
+export type RecommendationsResponse = {
+    mode: RecommendationMode
+    data: CommunityRecommendation[]
+    meta?: {
+        period?: "day" | "week" | "month" | "all"
+        personalized?: boolean
+        matched_tags?: Array<{ id: number; name: string; slug: string; color?: string | null }>
+        followed_authors_count?: number
+        signals_count?: number
+    }
+}
+
 export type CommunityTrend = {
     type: "publication" | "question" | "tag"
     title: string

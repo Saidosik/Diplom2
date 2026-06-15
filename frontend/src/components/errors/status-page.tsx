@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowRight, Code2, Home, LogIn, Search } from "lucide-react"
+import { ArrowRight, Code2, Home, LogIn, Search, ServerCrash } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -106,7 +106,7 @@ export function StatusPage({
                                 "flex aspect-square max-h-72 items-center justify-center rounded-3xl border bg-background/80 p-8",
                                 isServerError && "bg-gradient-to-br from-background to-muted/70"
                             )}>
-                                {isServerError ? <TeapotIllustration /> : isForbidden ? <ForbiddenIllustration /> : <RouteIllustration />}
+                                {isServerError ? <ServerErrorIllustration status={status} /> : isForbidden ? <ForbiddenIllustration /> : <RouteIllustration />}
                             </div>
 
                             <div className="rounded-2xl border bg-muted/30 p-4 font-mono text-sm leading-6">
@@ -116,7 +116,7 @@ export function StatusPage({
                                 </div>
                                 <pre className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">
 {isServerError
-    ? `status: ${status}\nservice: backend\nmessage: kettle_mode_enabled\nhint: retry_or_report`
+    ? `status: ${status}\nservice: backend\nmessage: server_error\nhint: retry_later`
     : isForbidden
         ? `status: ${status}\nroute: forbidden\nhint: login_or_request_access`
         : `status: ${status}\nroute: not_found\nhint: check_slug_or_search`}
@@ -168,22 +168,31 @@ function RouteIllustration() {
     )
 }
 
-function TeapotIllustration() {
+function ServerErrorIllustration({ status }: { status: string }) {
     return (
-        <svg viewBox="0 0 320 320" role="img" aria-label="Серверный чайник" className="h-full w-full max-w-72">
-            <defs>
-                <linearGradient id="teapotSteam" x1="0" x2="0" y1="0" y2="1">
-                    <stop stopColor="currentColor" stopOpacity="0.35" />
-                    <stop offset="1" stopColor="currentColor" stopOpacity="0.05" />
-                </linearGradient>
-            </defs>
-            <path d="M118 78c-18 20 18 28 0 48M164 58c-22 26 22 34 0 64M210 78c-18 20 18 28 0 48" fill="none" stroke="url(#teapotSteam)" strokeWidth="10" strokeLinecap="round" />
-            <path d="M88 154h132c12 0 22 10 22 22v34c0 34-28 62-62 62h-52c-34 0-62-28-62-62v-34c0-12 10-22 22-22Z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeOpacity="0.22" strokeWidth="8" />
-            <path d="M238 174c28 0 44 14 44 34s-16 34-44 34" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" opacity="0.28" />
-            <path d="M74 176H42c-9 0-13 11-6 17l38 34" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" opacity="0.28" />
-            <path d="M118 154c4-24 26-42 52-42s48 18 52 42" fill="none" stroke="currentColor" strokeWidth="10" strokeLinecap="round" opacity="0.22" />
-            <text x="154" y="220" textAnchor="middle" className="fill-current font-mono text-[46px] font-bold" opacity="0.72">418</text>
-            <path d="M118 286h84" stroke="currentColor" strokeWidth="12" strokeLinecap="round" opacity="0.16" />
-        </svg>
+        <div className="relative flex size-full min-h-52 items-center justify-center overflow-hidden">
+            <div className="absolute inset-4 rounded-3xl border border-primary/20 bg-primary/5" />
+            <div className="absolute left-10 top-10 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
+            <div className="absolute bottom-8 right-8 h-28 w-28 rounded-full bg-destructive/10 blur-2xl" />
+            <div className="relative w-full max-w-64 rounded-3xl border bg-card/95 p-5 shadow-lg">
+                <div className="flex items-center justify-between gap-3 border-b pb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex size-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive ring-1 ring-destructive/20">
+                            <ServerCrash className="size-6" />
+                        </div>
+                        <div>
+                            <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">server</p>
+                            <p className="text-sm font-semibold">Ошибка ответа</p>
+                        </div>
+                    </div>
+                    <span className="rounded-full border px-2.5 py-1 font-mono text-sm text-muted-foreground">{status}</span>
+                </div>
+                <div className="mt-5 space-y-3">
+                    <div className="h-2 rounded-full bg-primary/70" />
+                    <div className="h-2 w-4/5 rounded-full bg-muted" />
+                    <div className="h-2 w-2/3 rounded-full bg-muted" />
+                </div>
+            </div>
+        </div>
     )
 }

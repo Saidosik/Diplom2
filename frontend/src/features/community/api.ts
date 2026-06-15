@@ -1,4 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
+import { normalizeFeedItems } from "@/features/community/lib/response-normalizers"
 import type {
     CommunityNotification,
     NotificationCollectionResponse,
@@ -9,7 +10,7 @@ import type {
     CommunityTopUser,
     CommunityTrend,
     CommunityRecommendation,
-    CommunityFeedItem,
+    RecommendationsResponse,
     InterestProfile,
 } from "@/features/community/types"
 
@@ -19,8 +20,8 @@ export async function getCommunityDiscovery(period: "day" | "week" | "month" = "
 }
 
 export async function getCommunityFeed(period: "day" | "week" | "month" = "week") {
-    const response = await browserApi.get<{ period: string; data: CommunityFeedItem[] }>("/laravel/community/feed", { params: { period } })
-    return response.data
+    const response = await browserApi.get<unknown>("/laravel/community/feed", { params: { period } })
+    return { period, data: normalizeFeedItems(response.data) }
 }
 
 export async function getCommunityTrends(period: "day" | "week" | "month" = "week") {
@@ -30,6 +31,11 @@ export async function getCommunityTrends(period: "day" | "week" | "month" = "wee
 
 export async function getCommunityRecommendations(period: "day" | "week" | "month" = "week") {
     const response = await browserApi.get<{ period: string; data: CommunityRecommendation[] }>("/laravel/community/recommendations", { params: { period } })
+    return response.data
+}
+
+export async function getRecommendations(period: "day" | "week" | "month" = "week") {
+    const response = await browserApi.get<RecommendationsResponse>("/laravel/recommendations", { params: { period } })
     return response.data
 }
 

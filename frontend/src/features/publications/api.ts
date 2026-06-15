@@ -1,11 +1,11 @@
 import { browserApi } from "@/lib/http/browser"
+import { normalizePublicationsResponse } from "@/features/community/lib/response-normalizers"
 import type {
     Publication,
     PublicationCollectionResponse,
     PublicationPayload,
     PublicationSingleResponse,
     PopularPublicationPeriod,
-    PopularPublicationsResponse,
     PublicationQualityReport,
     PublicationVersion,
     PublicationTemplate,
@@ -37,8 +37,8 @@ export async function getMyPublications(params?: Record<string, string | number 
 
 
 export async function getPopularPublications(params?: { period?: PopularPublicationPeriod; limit?: number; page?: number; sort?: string; type?: string }) {
-    const response = await browserApi.get<PopularPublicationsResponse>("/publications/popular", { params })
-    return response.data
+    const response = await browserApi.get<unknown>("/publications/popular", { params })
+    return normalizePublicationsResponse(response.data, params?.period ?? "week")
 }
 
 

@@ -15,6 +15,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Services\Community\CommunityActivityService;
 use App\Services\PublicationRankingService;
+use App\Services\Recommendations\RecommendationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,19 +27,19 @@ use Throwable;
 
 class CommunityDiscoveryController extends Controller
 {
-    public function discovery(Request $request): JsonResponse
+    public function discovery(Request $request, RecommendationService $recommendationService): JsonResponse
     {
+        $user = $this->attachOptionalUser($request);
         $period = $this->period($request);
         $since = $this->periodStart($period);
-        $user = $this->optionalUser($request);
-        $profile = $this->userInterestProfile($user);
+        $recommendationPayload = $recommendationService->forRequest($request, $user);
 
         $popularPublications = $this->popularPublicationsCollection($since, 12);
         $popularQuestions = $this->popularQuestions($since, 12);
         $unansweredQuestions = $this->unansweredQuestions(6);
         $topUsers = $this->topUsers(8);
         $popularTags = $this->popularTags($since, 16);
-        $recommendations = $this->buildRecommendations($popularPublications, $popularQuestions, $popularTags, $user, $profile);
+        $recommendations = $recommendationPayload['data'];
 
         return response()->json([
             'period' => $period,
@@ -53,9 +54,9 @@ class CommunityDiscoveryController extends Controller
             'top_users' => $topUsers,
             'popular_tags' => $popularTags,
             'recommendation_meta' => [
-                'matched_tags' => $this->matchedTagsPayload($profile),
-                'followed_authors_count' => count($profile['author_ids']),
-                'signals_count' => $profile['signals_count'],
+                'matched_tags' => $recommendationPayload['meta']['matched_tags'],
+                'followed_authors_count' => $recommendationPayload['meta']['followed_authors_count'],
+                'signals_count' => $recommendationPayload['meta']['signals_count'],
             ],
         ]);
     }
@@ -63,13 +64,14 @@ class CommunityDiscoveryController extends Controller
 
     public function popularPublications(Request $request): JsonResponse
     {
+        $user = $this->attachOptionalUser($request);
         $period = $this->period($request);
         $limit = max(1, min(24, (int) $request->query('limit', 6)));
         $page = max(1, (int) $request->query('page', 1));
         $sort = in_array((string) $request->query('sort', 'popular'), ['popular', 'new', 'discussed', 'rating', 'views'], true) ? (string) $request->query('sort', 'popular') : 'popular';
         $type = (string) $request->query('type', '');
         $type = in_array($type, \App\Enums\PublicationType::values(), true) ? $type : null;
-        $cacheKey = sprintf('community:popular-publications:%s:%s:%s:%d:%d', $period, $sort, $type ?: 'all', $limit, $page);
+        $cacheKey = sprintf('community:popular-publications:%s:%s:%s:%d:%d:%s', $period, $sort, $type ?: 'all', $limit, $page, $user ? 'user:' . $user->id : 'guest');
 
         $payload = Cache::remember($cacheKey, now()->addMinutes(2), function () use ($period, $limit, $page, $request, $sort, $type) {
             $since = $this->periodStart($period);
@@ -99,6 +101,7 @@ class CommunityDiscoveryController extends Controller
 
     public function feed(Request $request): JsonResponse
     {
+        $this->attachOptionalUser($request);
         $period = $this->period($request);
         $since = $this->periodStart($period);
 
@@ -114,6 +117,7 @@ class CommunityDiscoveryController extends Controller
 
     public function trends(Request $request): JsonResponse
     {
+        $this->attachOptionalUser($request);
         $period = $this->period($request);
         $since = $this->periodStart($period);
 
@@ -127,33 +131,26 @@ class CommunityDiscoveryController extends Controller
         ]);
     }
 
-    public function recommendations(Request $request): JsonResponse
+    public function recommendations(Request $request, RecommendationService $recommendationService): JsonResponse
     {
-        $period = $this->period($request);
-        $since = $this->periodStart($period);
-        $user = $this->optionalUser($request);
-        $profile = $this->userInterestProfile($user);
+        $user = $this->attachOptionalUser($request);
+        $payload = $recommendationService->forRequest($request, $user);
 
         return response()->json([
-            'period' => $period,
+            'period' => $payload['meta']['period'],
             'personalized' => $user !== null,
-            'data' => $this->buildRecommendations(
-                $this->popularPublicationsCollection($since, 18),
-                $this->popularQuestions($since, 18),
-                $this->popularTags($since, 18),
-                $user,
-                $profile,
-            ),
+            'data' => $payload['data'],
             'meta' => [
-                'matched_tags' => $this->matchedTagsPayload($profile),
-                'followed_authors_count' => count($profile['author_ids']),
-                'signals_count' => $profile['signals_count'],
+                'matched_tags' => $payload['meta']['matched_tags'],
+                'followed_authors_count' => $payload['meta']['followed_authors_count'],
+                'signals_count' => $payload['meta']['signals_count'],
             ],
         ]);
     }
 
     public function sidebar(Request $request): JsonResponse
     {
+        $this->attachOptionalUser($request);
         $period = $this->period($request);
         $since = $this->periodStart($period);
         $popular = $this->popularPublicationsCollection($since, 12);
@@ -223,19 +220,24 @@ class CommunityDiscoveryController extends Controller
         };
     }
 
-    private function optionalUser(Request $request): ?User
+    private function attachOptionalUser(Request $request): ?User
     {
         if (! $request->bearerToken()) {
+            $request->setUserResolver(fn () => null);
+
             return null;
         }
 
         try {
             $user = JWTAuth::parseToken()->authenticate();
-
-            return $user instanceof User ? $user : null;
+            $user = $user instanceof User ? $user : null;
         } catch (Throwable) {
-            return null;
+            $user = null;
         }
+
+        $request->setUserResolver(fn () => $user);
+
+        return $user;
     }
 
     /**
