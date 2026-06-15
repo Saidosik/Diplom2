@@ -34,14 +34,14 @@ export default function RootErrorPage({
         <StatusPage
             status="500"
             eyebrow="Ошибка сервера"
-            title="Сервер заварил чай вместо ответа"
-            description="Что-то пошло не так при обработке запроса. Пасхалка честная: внутри он чайник, а не кофемашина — но повторный запрос часто возвращает всё на место."
-            details={error.digest ? `Код диагностики: ${error.digest}` : "Код диагностики появится здесь, если его вернёт Next.js."}
+            title="Ошибка сервера"
+            description="Не удалось загрузить данные. Попробуйте обновить страницу позже."
+            details={error.digest ? `Код диагностики: ${error.digest}` : "HTTP 500: сервер временно не смог обработать запрос."}
             variant="server-error"
             action={
                 <Button type="button" variant="secondary" onClick={reset}>
                     <RotateCcw className="size-4" />
-                    Повторить запрос
+                    Повторить
                 </Button>
             }
         />
