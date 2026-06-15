@@ -22,6 +22,7 @@ use App\Models\SavedItem;
 use App\Models\User;
 use App\Models\UserFile;
 use App\Services\Profile\AchievementService;
+use App\Services\Profile\ProfilePinService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -113,18 +114,12 @@ class ProfileHubController extends Controller
             'pinnable_type' => ['required', 'string', Rule::in(['publication', 'issue_question', 'issue_answer', 'code_snippet', 'user_file'])],
             'pinnable_id' => ['required', 'integer', 'min:1'],
             'position' => ['nullable', 'integer', 'min:0', 'max:50'],
+            'title_override' => ['nullable', 'string', 'max:255'],
+            'description_override' => ['nullable', 'string', 'max:1000'],
+            'visibility' => ['nullable', 'string', Rule::in(['public', 'private'])],
         ]);
 
-        $target = $this->resolveOwnPinnable($request->user(), $data['pinnable_type'], (int) $data['pinnable_id']);
-
-        $pin = PinnedItem::query()->updateOrCreate(
-            [
-                'user_id' => $request->user()->id,
-                'pinnable_type' => $target->getMorphClass(),
-                'pinnable_id' => $target->getKey(),
-            ],
-            ['position' => (int) ($data['position'] ?? 0)]
-        );
+        $pin = app(ProfilePinService::class)->pin($request->user(), $data['pinnable_type'], (int) $data['pinnable_id'], $data);
 
         return response()->json(['data' => $this->pinnedItemData($pin->fresh('pinnable'), true)], 201);
     }
@@ -136,13 +131,7 @@ class ProfileHubController extends Controller
             'pinnable_id' => ['required', 'integer', 'min:1'],
         ]);
 
-        $target = $this->resolveOwnPinnable($request->user(), $data['pinnable_type'], (int) $data['pinnable_id']);
-
-        PinnedItem::query()
-            ->where('user_id', $request->user()->id)
-            ->where('pinnable_type', $target->getMorphClass())
-            ->where('pinnable_id', $target->getKey())
-            ->delete();
+        app(ProfilePinService::class)->unpin($request->user(), $data['pinnable_type'], (int) $data['pinnable_id']);
 
         return response()->json(['message' => 'Закреп удалён из профиля.']);
     }
@@ -218,7 +207,8 @@ class ProfileHubController extends Controller
             'user' => $this->safeProfileBlock('user', fn () => $this->userData($user, $owner), $this->minimalUserData($user, $owner)),
             'stats' => $this->safeProfileBlock('stats', fn () => $this->stats($user), []),
             'completion' => $this->safeProfileBlock('completion', fn () => $service->completion($user), 0),
-            'pinned_items' => $this->safeProfileBlock('pinned_items', fn () => $this->pinnedData($user, $owner, 8), []),
+            'pins' => $this->safeProfileBlock('pins', fn () => $this->pinnedData($user, $owner, 5), []),
+            'pinned_items' => $this->safeProfileBlock('pinned_items', fn () => $this->pinnedData($user, $owner, 5), []),
             'materials' => $this->safeProfileBlock('materials', fn () => $this->materialsData($user, 'all', $owner, 10), []),
             'snippets' => $this->safeProfileBlock('snippets', fn () => $this->snippetsData($user, $owner, 8), []),
             'files' => $canSeeFiles ? $this->safeProfileBlock('files', fn () => $this->filesData($user, $owner, 8), []) : [],
@@ -228,8 +218,35 @@ class ProfileHubController extends Controller
             'reputation' => $this->safeProfileBlock('reputation', fn () => $this->reputationData($user), ['score' => (int) ($user->reputation_score ?? 0), 'level' => $user->reputationLevel(), 'events' => []]),
             'saved_summary' => $owner ? $this->safeProfileBlock('saved_summary', fn () => SavedItem::query()->where('user_id', $user->id)->count(), 0) : null,
             'saved_items' => $owner ? $this->safeProfileBlock('saved_items', fn () => $this->savedItemsData($user, 12), []) : [],
-            'relationship_to_viewer' => $owner ? ['is_owner' => true] : $this->safeProfileBlock('relationship', fn () => $this->relationship($viewer, $user), ['is_owner' => false, 'is_following' => false, 'is_friend' => false, 'friend_request_status' => null, 'can_message' => false]),
+            'previews' => $this->safeProfileBlock('previews', fn () => $this->previews($user, $owner, $canSeeFiles, $canSeeActivity), []),
+            'relation_state' => $owner ? $this->ownerRelationship() : $this->safeProfileBlock('relationship', fn () => $this->relationship($viewer, $user), $this->guestRelationship()),
+            'relationship_to_viewer' => $owner ? $this->ownerRelationship() : $this->safeProfileBlock('relationship', fn () => $this->relationship($viewer, $user), $this->guestRelationship()),
         ];
+    }
+
+
+    private function previews(User $user, bool $owner, bool $canSeeFiles, bool $canSeeActivity): array
+    {
+        return [
+            'latest_publications' => $this->materialsData($user, 'publications', $owner, 3),
+            'latest_questions' => $this->materialsData($user, 'questions', $owner, 3),
+            'latest_answers' => $this->materialsData($user, 'answers', $owner, 3),
+            'snippets_preview' => $this->snippetsData($user, $owner, 3),
+            'files_preview' => $canSeeFiles ? $this->filesData($user, $owner, 3) : [],
+            'achievements_preview' => array_slice($this->achievementsData($user), 0, 3),
+            'activity_preview' => $canSeeActivity ? $this->activityData($user, $owner, 5) : [],
+            'reputation_summary' => $this->reputationData($user),
+        ];
+    }
+
+    private function ownerRelationship(): array
+    {
+        return ['is_owner' => true, 'is_friend' => false, 'friendship_status' => null, 'incoming_friend_request_id' => null, 'outgoing_friend_request_id' => null, 'is_subscribed' => false, 'is_following' => false, 'can_message' => false, 'can_report' => false];
+    }
+
+    private function guestRelationship(): array
+    {
+        return ['is_owner' => false, 'is_friend' => false, 'friendship_status' => null, 'friend_request_status' => null, 'incoming_friend_request_id' => null, 'outgoing_friend_request_id' => null, 'is_subscribed' => false, 'is_following' => false, 'can_message' => false, 'can_report' => true];
     }
 
     private function safeProfileBlock(string $block, callable $callback, mixed $fallback): mixed
@@ -252,6 +269,7 @@ class ProfileHubController extends Controller
         $data = [
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username,
             'avatar' => $user->avatar,
             'avatar_url' => $this->avatarUrl($user),
             'headline' => $user->headline,
@@ -260,6 +278,7 @@ class ProfileHubController extends Controller
             'direction' => $user->direction,
             'website_url' => $user->website_url,
             'github_url' => $user->github_url,
+            'telegram_url' => $user->telegram_url,
             'profile_visibility' => $user->profile_visibility ?? 'public',
             'reputation_score' => (int) ($user->reputation_score ?? 0),
             'reputation_level' => $user->reputationLevel(),
@@ -279,6 +298,8 @@ class ProfileHubController extends Controller
         $data = collect($user->toArray())->only([
             'id',
             'name',
+            'username',
+            'role',
             'avatar',
             'cover_url',
             'headline',
@@ -287,6 +308,7 @@ class ProfileHubController extends Controller
             'direction',
             'website_url',
             'github_url',
+            'telegram_url',
             'profile_visibility',
             'created_at',
             'updated_at',
@@ -310,10 +332,14 @@ class ProfileHubController extends Controller
     {
         return [
             'reputation' => (int) $user->reputation_score,
+            'publications_count' => $user->publications()->published()->count(),
+            'questions_count' => $user->issueQuestions()->published()->count(),
+            'answers_count' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->count(),
+            'accepted_answers' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->where('is_accepted', true)->count(),
+            'comments_count' => $user->comments()->published()->count(),
             'publications' => $user->publications()->published()->count(),
             'questions' => $user->issueQuestions()->published()->count(),
             'answers' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->count(),
-            'accepted_answers' => $user->issueAnswers()->where('status', IssueAnswerStatus::Published->value)->where('is_accepted', true)->count(),
             'comments' => $user->comments()->published()->count(),
             'snippets' => $user->codeSnippets()->where('visibility', 'public')->where('status', CodeSnippet::STATUS_ACTIVE)->count(),
             'files' => $user->userFiles()->where('visibility', 'public')->count(),
@@ -589,6 +615,7 @@ class ProfileHubController extends Controller
     {
         return PinnedItem::query()
             ->where('user_id', $user->id)
+            ->when(! $owner, fn ($query) => $query->where('visibility', 'public'))
             ->with('pinnable')
             ->orderBy('position')
             ->latest('id')
@@ -614,7 +641,10 @@ class ProfileHubController extends Controller
 
         return array_merge($item, [
             'pin_id' => $pin->id,
+            'title' => $pin->title_override ?: ($item['title'] ?? null),
+            'description' => $pin->description_override ?: ($item['excerpt'] ?? null),
             'position' => (int) $pin->position,
+            'visibility' => $pin->visibility ?? 'public',
             'pinned_at' => $pin->created_at?->toISOString(),
         ]);
     }
@@ -771,7 +801,12 @@ class ProfileHubController extends Controller
                 'is_following' => false,
                 'is_friend' => false,
                 'friend_request_status' => null,
+                'friendship_status' => null,
+                'incoming_friend_request_id' => null,
+                'outgoing_friend_request_id' => null,
+                'is_subscribed' => false,
                 'can_message' => false,
+                'can_report' => true,
             ];
         }
 
@@ -785,13 +820,21 @@ class ProfileHubController extends Controller
 
         return [
             'is_owner' => false,
-            'is_following' => $viewer->subscriptions()
+            'is_subscribed' => $viewer->subscriptions()
                 ->where('subscribable_type', User::class)
                 ->where('subscribable_id', $user->id)
                 ->exists(),
             'is_friend' => $isFriend,
+            'is_following' => $viewer->subscriptions()
+                ->where('subscribable_type', User::class)
+                ->where('subscribable_id', $user->id)
+                ->exists(),
+            'friendship_status' => $isFriend ? 'friends' : ($pending ? ((int) $pending->sender_id === (int) $viewer->id ? 'outgoing' : 'incoming') : null),
             'friend_request_status' => $pending ? ((int) $pending->sender_id === (int) $viewer->id ? 'sent' : 'incoming') : null,
+            'incoming_friend_request_id' => $pending && (int) $pending->sender_id === (int) $user->id ? $pending->id : null,
+            'outgoing_friend_request_id' => $pending && (int) $pending->sender_id === (int) $viewer->id ? $pending->id : null,
             'can_message' => true,
+            'can_report' => true,
             'mutual_friends_count' => $this->friendIds($viewer)->intersect($this->friendIds($user))->count(),
         ];
     }
