@@ -42,8 +42,16 @@ ARG COMPOSER_INSTALL_ARGS="--no-interaction --prefer-dist --optimize-autoloader"
 RUN composer install ${COMPOSER_INSTALL_ARGS} \
     && groupadd --gid 1000 laravel \
     && useradd --uid 1000 --gid laravel --shell /bin/bash --create-home laravel \
-    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
-    && chown -R laravel:laravel storage bootstrap/cache
+    && mkdir -p \
+        storage/app/public \
+        storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && rm -rf public/storage \
+    && ln -s ../storage/app/public public/storage \
+    && chown -R laravel:laravel storage bootstrap/cache public
 
 COPY docker/entrypoint.sh /usr/local/bin/laravel-entrypoint
 RUN chmod +x /usr/local/bin/laravel-entrypoint
