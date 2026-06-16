@@ -1,58 +1,35 @@
 "use client"
 
 import { useEffect } from "react"
-import { RotateCcw } from "lucide-react"
+import { AlertTriangle, RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { StatusPage } from "@/components/errors/status-page"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function MainErrorPage({
-    error,
-    reset,
-}: {
-    error: Error & { digest?: string }
-    reset: () => void
-}) {
+export default function MainRouteError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
     useEffect(() => {
-        console.error("[MAIN_ERROR]", error)
+        console.error("Home page render failed", error)
     }, [error])
 
-    if (isForbiddenError(error)) {
-        return (
-            <StatusPage
-                status="403"
-                eyebrow="Доступ закрыт"
-                title="Недостаточно прав для этого действия"
-                description="Сервер отклонил запрос из-за прав доступа. Войдите другим аккаунтом или вернитесь к публичной ленте сообщества."
-                details="Если вы считаете, что доступ должен быть открыт, обратитесь к администратору проекта."
-                variant="forbidden"
-            />
-        )
-    }
-
     return (
-        <StatusPage
-            status="500"
-            eyebrow="Ошибка сервера"
-            title="Ошибка сервера"
-            description="Не удалось загрузить данные. Попробуйте обновить страницу позже."
-            details={error.digest ? `Код диагностики: ${error.digest}` : "HTTP 500: сервер временно не смог обработать запрос."}
-            variant="server-error"
-            action={
-                <Button type="button" variant="secondary" onClick={reset}>
-                    <RotateCcw className="size-4" />
-                    Повторить
-                </Button>
-            }
-        />
+        <main className="mx-auto flex min-h-[60vh] w-full max-w-4xl items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+            <Card className="w-full border-destructive/30 bg-destructive/5">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <AlertTriangle className="size-5 text-destructive" />
+                        Не удалось отрисовать главную страницу
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Это не должно ломать весь сайт. Попробуйте обновить ленту, а если ошибка повторится — проверьте BFF/API рекомендации и server logs.
+                    </p>
+                    <Button type="button" onClick={reset} className="rounded-none">
+                        <RefreshCw className="size-4" />
+                        Повторить загрузку
+                    </Button>
+                </CardContent>
+            </Card>
+        </main>
     )
-}
-
-
-function isForbiddenError(error: Error & { digest?: string }) {
-    const maybeStatus = error as Error & { status?: number; response?: { status?: number } }
-
-    return maybeStatus.status === 403
-        || maybeStatus.response?.status === 403
-        || error.message.includes("403")
 }

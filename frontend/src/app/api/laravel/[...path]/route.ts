@@ -7,15 +7,28 @@ import { isAxiosError } from "axios";
 import { NextRequest, NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
+export const revalidate = 0
 
-const SENSITIVE_GET_ENDPOINTS = new Set([
+const NO_STORE_GET_ENDPOINTS = new Set([
+    "recommendations",
+    "community/discovery",
+    "community/feed",
+    "community/recommendations",
+    "community/trends",
+])
+
+const PERSONALIZED_FALLBACK_ENDPOINTS = new Set([
     "recommendations",
     "community/discovery",
     "community/recommendations",
 ])
 
-const SENSITIVE_HEADERS = {
-    "Cache-Control": "private, no-store",
+const RETRY_AS_PUBLIC_STATUSES = new Set([401, 403, 500, 502, 503, 504])
+
+const NO_STORE_HEADERS = {
+    "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
     "Vary": "Cookie, Authorization",
 }
 
@@ -41,7 +54,7 @@ async function proxyLaravelStream(request: NextRequest, endpoint: string) {
     const baseURL = (process.env.LARAVEL_API_URL ?? process.env.NEXT_PUBLIC_LARAVEL_API_URL)
 
     if (!baseURL) {
-        return NextResponse.json({ message: "Laravel API no defined" }, { status: 500 })
+        return NextResponse.json({ message: "Laravel API no defined" }, { status: 500, headers: NO_STORE_HEADERS })
     }
 
     const url = `${baseURL.replace(/\/+$/, "")}/${endpoint}`
@@ -62,7 +75,7 @@ async function proxyLaravelStream(request: NextRequest, endpoint: string) {
         const text = await response.text().catch(() => "")
         return NextResponse.json(
             text ? safeJson(text) : { message: "Ошибка streaming-запроса к Laravel" },
-            { status: response.status }
+            { status: response.status, headers: NO_STORE_HEADERS }
         )
     }
 
@@ -89,55 +102,112 @@ async function proxyLaravel(request: NextRequest, context: RouteContext) {
     const pathname = path.join("/")
     const endpoint = `${pathname}${request.nextUrl.search}`
 
-    if (path.join("/") === "ai/chat/stream" || request.headers.get("accept")?.includes("text/event-stream")) {
+    if (pathname === "ai/chat/stream" || request.headers.get("accept")?.includes("text/event-stream")) {
         return proxyLaravelStream(request, endpoint)
     }
 
-    const token = request.headers.get("x-vector-public-request") === "1" ? null : await getAccessTokenCookie()
+    const forcePublic = request.headers.get("x-vector-public-request") === "1"
+    const token = forcePublic ? null : await getAccessTokenCookie()
     const Laravel = createLaravelApi(token)
     const contentType = request.headers.get("content-type") ?? undefined;
+    const body = await readProxyBody(request)
+    const headers = contentType ? { "Content-Type": contentType } : undefined
 
     try {
-        const body = await readProxyBody(request)
-
         const response = await Laravel.request({
             url: endpoint,
             method: request.method,
             data: body,
-            headers: {
-                ...(contentType ? { "Content-Type": contentType } : {}),
-            }
+            headers,
         })
 
         return NextResponse.json(response.data, {
             status: response.status,
-            headers: isSensitiveGet(request, pathname) ? SENSITIVE_HEADERS : undefined,
+            headers: shouldNoStore(request, pathname) ? NO_STORE_HEADERS : undefined,
         })
     } catch (error) {
         if (isAxiosError(error)) {
-            const headers = new Headers()
-            const retryAfter = error.response?.headers?.["retry-after"]
-            if (retryAfter) headers.set("Retry-After", String(retryAfter))
-            if (isSensitiveGet(request, pathname)) {
-                headers.set("Cache-Control", SENSITIVE_HEADERS["Cache-Control"])
-                headers.set("Vary", SENSITIVE_HEADERS.Vary)
+            const status = error.response?.status ?? 500
+
+            if (shouldRetryPersonalizedAsPublic(request, pathname, token, status)) {
+                const fallbackResponse = await tryPublicFallback(endpoint, request.method, headers)
+
+                if (fallbackResponse) {
+                    return NextResponse.json(markFallbackPayload(fallbackResponse.data), {
+                        status: fallbackResponse.status,
+                        headers: NO_STORE_HEADERS,
+                    })
+                }
             }
+
+            const responseHeaders = new Headers()
+            const retryAfter = error.response?.headers?.["retry-after"]
+            if (retryAfter) responseHeaders.set("Retry-After", String(retryAfter))
+            applyNoStoreHeaders(responseHeaders, shouldNoStore(request, pathname))
 
             return NextResponse.json(
                 error.response?.data ?? { message: "Ошибка запроса к серверу" },
-                { status: error.response?.status ?? 500, headers }
+                { status, headers: responseHeaders }
             )
         }
 
         return NextResponse.json(
             { message: "Ошибка проксирования запроса к серверу" },
-            { status: 500, headers: isSensitiveGet(request, pathname) ? SENSITIVE_HEADERS : undefined }
+            { status: 500, headers: shouldNoStore(request, pathname) ? NO_STORE_HEADERS : undefined }
         )
     }
 }
 
-function isSensitiveGet(request: NextRequest, pathname: string) {
-    return request.method === "GET" && SENSITIVE_GET_ENDPOINTS.has(pathname)
+function shouldNoStore(request: NextRequest, pathname: string) {
+    return request.method === "GET" && NO_STORE_GET_ENDPOINTS.has(pathname)
+}
+
+function shouldRetryPersonalizedAsPublic(request: NextRequest, pathname: string, token: string | null, status: number) {
+    return Boolean(token)
+        && request.method === "GET"
+        && PERSONALIZED_FALLBACK_ENDPOINTS.has(pathname)
+        && RETRY_AS_PUBLIC_STATUSES.has(status)
+}
+
+async function tryPublicFallback(endpoint: string, method: string, headers?: Record<string, string>) {
+    try {
+        return await createLaravelApi().request({
+            url: endpoint,
+            method,
+            headers,
+        })
+    } catch (fallbackError) {
+        console.error("Laravel public fallback failed", fallbackError)
+        return null
+    }
+}
+
+function markFallbackPayload(payload: unknown) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return payload
+    }
+
+    const record = payload as Record<string, unknown>
+    const meta = record.meta && typeof record.meta === "object" && !Array.isArray(record.meta)
+        ? record.meta as Record<string, unknown>
+        : {}
+
+    return {
+        ...record,
+        meta: {
+            ...meta,
+            fallback: true,
+            fallback_reason: "personalized_request_failed_public_feed_used",
+        },
+    }
+}
+
+function applyNoStoreHeaders(headers: Headers, enabled: boolean) {
+    if (!enabled) return
+
+    Object.entries(NO_STORE_HEADERS).forEach(([key, value]) => {
+        headers.set(key, value)
+    })
 }
 
 export const GET = proxyLaravel

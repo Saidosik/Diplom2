@@ -50,6 +50,15 @@ export type RunCodePayload = {
     snippet_id?: number
 }
 
+export type SaveCodeSnippetPayload = {
+    title: string
+    language: string
+    code: string
+    stdin?: string
+    visibility: "private" | "public"
+    snippet_type?: "snippet" | "template" | "solution" | "note"
+    status?: "draft" | "active" | "archived"
+}
 
 export type UserFile = {
     id: number

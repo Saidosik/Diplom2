@@ -1,5 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
-import type { CodeRun, CodeSnippet, PlaygroundLanguage, RunCodePayload, UserFile, UserFilePreview } from "@/features/playground/types"
+import type { CodeRun, CodeSnippet, PlaygroundLanguage, RunCodePayload, SaveCodeSnippetPayload, UserFile, UserFilePreview } from "@/features/playground/types"
 
 type Collection<T> = {
     data: T[]
@@ -28,6 +28,16 @@ export async function runCode(payload: RunCodePayload) {
 
 export async function getSnippet(id: number) {
     const response = await browserApi.get<Resource<CodeSnippet>>(`/laravel/playground/snippets/${id}`)
+    return response.data.data
+}
+
+export async function createSnippet(payload: SaveCodeSnippetPayload) {
+    const response = await browserApi.post<Resource<CodeSnippet>>("/laravel/playground/snippets", payload)
+    return response.data.data
+}
+
+export async function updateSnippet(id: number, payload: Partial<SaveCodeSnippetPayload>) {
+    const response = await browserApi.patch<Resource<CodeSnippet>>(`/laravel/playground/snippets/${id}`, payload)
     return response.data.data
 }
 

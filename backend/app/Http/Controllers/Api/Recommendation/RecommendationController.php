@@ -16,14 +16,66 @@ class RecommendationController extends Controller
     {
         $user = $this->optionalUser($request);
         $guestId = $user ? null : $this->guestIdFromRequest($request);
-        $payload = $recommendations->forRequest($request, $user, $guestId);
+        $fallback = false;
+
+        try {
+            $payload = $recommendations->forRequest($request, $user, $guestId);
+        } catch (Throwable $exception) {
+            report($exception);
+            $fallback = true;
+            $payload = $this->fallbackPayload($request, $recommendations, $guestId, 'personalized_recommendations_failed');
+        }
+
         $response = response()->json($payload);
 
-        if ($user || ($payload['meta']['strategy'] ?? null) === 'guest_events') {
-            return $response->header('Cache-Control', 'private, no-store')->header('Vary', 'Cookie, Authorization');
+        if ($user || $fallback || ($payload['meta']['strategy'] ?? null) === 'guest_events') {
+            return $response
+                ->header('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+                ->header('Pragma', 'no-cache')
+                ->header('Expires', '0')
+                ->header('Vary', 'Cookie, Authorization');
         }
 
         return $response->header('Cache-Control', 'public, max-age=60')->header('Vary', 'Cookie, Authorization');
+    }
+
+    /** @return array<string,mixed> */
+    private function fallbackPayload(Request $request, RecommendationService $recommendations, ?string $guestId, string $reason): array
+    {
+        try {
+            return $this->withFallbackMeta(
+                $recommendations->forRequest($request, null, $guestId),
+                $reason,
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->withFallbackMeta([
+                'mode' => 'guest',
+                'data' => [],
+                'meta' => [
+                    'period' => $recommendations->period($request),
+                    'personalized' => false,
+                    'matched_tags' => [],
+                    'followed_authors_count' => 0,
+                    'signals_count' => 0,
+                    'strategy' => 'guest_trending',
+                ],
+            ], $reason . '_empty');
+        }
+    }
+
+    /** @param array<string,mixed> $payload @return array<string,mixed> */
+    private function withFallbackMeta(array $payload, string $reason): array
+    {
+        $payload['mode'] = $payload['mode'] ?? 'guest';
+        $payload['meta'] = array_merge($payload['meta'] ?? [], [
+            'fallback' => true,
+            'fallback_reason' => $reason,
+            'personalized' => false,
+        ]);
+
+        return $payload;
     }
 
     private function guestIdFromRequest(Request $request): ?string
