@@ -6,7 +6,7 @@ use Illuminate\Support\Str;
 
 class GroundedAnswerService
 {
-    public function __construct(private readonly AiSdkService $sdk)
+    public function __construct(private readonly AiSdkService $sdk, private readonly AiSettingsService $settings)
     {
     }
 
@@ -198,26 +198,9 @@ class GroundedAnswerService
             ->take(-8)
             ->map(fn (array $message) => ($message['role'] ?? 'message') . ': ' . Str::limit((string) ($message['content'] ?? ''), 900, ''))
             ->implode("\n");
-
-        $baseInstructions = [
-            'Ты AI-помощник информационного сообщества для программистов.',
-            'Отвечай на русском языке.',
-            'Давай практические шаги и предупреждай проверять версии библиотек, команды и окружение.',
-        ];
-
-        if ($useRag) {
-            $baseInstructions[] = 'Используй найденные источники платформы как основной контекст и не выдавай неподтверждённые факты как точные.';
-            $baseInstructions[] = 'Если контекста недостаточно, честно скажи, что данных мало, и предложи уточнить вопрос.';
-            $baseInstructions[] = 'В конце кратко объясни, на какие источники стоит посмотреть в интерфейсе.';
-        } else {
-            $baseInstructions[] = 'Это обычный чат: отвечай по вопросу пользователя без обязательного поиска по базе знаний.';
-            $baseInstructions[] = 'Если пользователь приложил файлы, анализируй их как контекст.';
-            $baseInstructions[] = 'Не упоминай источники платформы, если они не были переданы.';
-        }
-
-        $instructions = implode("\n", $baseInstructions);
-
-        $model = (string) ($options['model'] ?? config('ai.models.chat'));
+        $model = (string) ($options['model'] ?? $this->settings->defaultChatModelId());
+        $promptMode = $useRag ? 'rag' : (in_array($mode, ['files', 'code', 'project', 'question_auto_answer'], true) ? $mode : 'chat');
+        $instructions = $this->settings->promptFor($promptMode, $model);
 
         $prompt = "Режим: {$mode}\n"
             . "Модель интерфейса: {$model}\n\n"
@@ -239,24 +222,7 @@ class GroundedAnswerService
             ->take(6)
             ->map(fn (array $source, int $index) => '[' . ($index + 1) . '] ' . ($source['title'] ?? 'Источник') . "\nURL: " . ($source['href'] ?? '#') . "\n" . Str::limit((string) ($source['content'] ?? ''), 1200, ''))
             ->implode("\n\n");
-
-        $instructions = implode("\n", [
-            'Ты AI-помощник песочницы кода платформы "Вектор".',
-            'Отвечай на русском языке.',
-            'Анализируй код только в рамках переданного контекста: название, язык, stdin, stdout, stderr, статус запуска, exit code, время, память и способ запуска.',
-            'Код выполняется на backend через Laravel queue job и Docker sandbox, а не в браузере.',
-            'Не утверждай, что код успешно выполнился, если run_status отсутствует, queued или running.',
-            'Если запуска ещё нет, разбирай только код и явно скажи, что фактического результата выполнения нет.',
-            'Если задача ещё в очереди или выполняется, скажи, что результата запуска пока нет, и предложи дождаться завершения.',
-            'Если есть stderr или exit_code != 0, сначала объясни ошибку.',
-            'Если stderr нет и exit_code = 0, объясни результат и проверь, соответствует ли вывод ожидаемому.',
-            'Если пользователь выбрал optimize, предложи улучшения без изменения поведения.',
-            'Если пользователь выбрал write_tests, предложи тестовые входные данные и ожидаемые результаты.',
-            'Не выдумывай stdout/stderr, которого нет.',
-            'Не предлагай опасные действия: сетевые запросы, доступ к файловой системе вне sandbox, запуск системных команд, секреты или токены.',
-            'Если контекста недостаточно, честно скажи, чего не хватает.',
-            'Формат ответа: Кратко: Что вижу: Проблема: Что сделать: Проверка:',
-        ]);
+        $instructions = $this->settings->promptFor('code');
 
         $language = (string) ($runContext['language'] ?? 'code');
         $prompt = "Контекст запуска:\n"

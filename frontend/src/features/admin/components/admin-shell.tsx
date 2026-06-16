@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, Palette, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
+import { BarChart3, BrainCircuit, Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, Palette, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
 import type { User } from "@/features/auth/types"
 import { SiteBrand } from "@/components/layout/site-brand"
 import { AppAmbient } from "@/components/layout/app-ambient"
@@ -35,9 +35,14 @@ const mainItems = [
     { title: "Контент", href: "/admin/content", icon: FileText },
     { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
-    { title: "AI индекс", href: "/admin/ai", icon: Database },
     { title: "Правовые документы", href: "/admin/legal/privacy-policy", icon: ScrollText, adminOnly: true },
     { title: "Внешний вид", href: "/admin/appearance", icon: Palette, adminOnly: true },
+]
+
+const aiItems = [
+    { title: "AI обзор", href: "/admin/ai", icon: BarChart3, adminOnly: true },
+    { title: "Модели и промпты", href: "/admin/ai/models", icon: BrainCircuit, adminOnly: true },
+    { title: "RAG индекс", href: "/admin/ai/index", icon: Database, adminOnly: true },
 ]
 
 const systemItems = [
@@ -63,7 +68,7 @@ function AdminNavLink({ item }: { item: { title: string; href: string; icon: Rea
     const pathname = usePathname()
     const { setOpenMobile } = useSidebar()
     const Icon = item.icon
-    const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))
+    const isActive = pathname === item.href || (!["/admin", "/admin/ai"].includes(item.href) && pathname.startsWith(item.href))
 
     return (
         <SidebarMenuItem>
@@ -119,6 +124,17 @@ function AdminSidebar({ user, canManageSystem }: { user: User; canManageSystem: 
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+
+                {canManageSystem ? (
+                    <SidebarGroup>
+                        <SidebarGroupLabel>AI</SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {aiItems.map((item) => <AdminNavLink key={item.href} item={item} />)}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                ) : null}
 
                 {canManageSystem ? (
                     <SidebarGroup>

@@ -17,7 +17,7 @@ use Throwable;
 
 class KnowledgeExtractorService
 {
-    public function __construct(private readonly EmbeddingService $embeddings)
+    public function __construct(private readonly EmbeddingService $embeddings, private readonly AiSettingsService $settings)
     {
     }
 
@@ -391,8 +391,9 @@ class KnowledgeExtractorService
         bool $force = false,
         ?int $requestedById = null,
     ): AiKnowledgeDocument {
-        $provider = (string) config('ai.embeddings.provider', config('ai.provider', 'local'));
-        $model = (string) config('ai.embeddings.model', 'local');
+        $embedding = $this->settings->embeddingConfig();
+        $provider = $embedding['provider'];
+        $model = $embedding['model'];
         $dimensions = $this->embeddings->dimensions();
         $contentHash = hash('sha256', json_encode([
             $sourceType,

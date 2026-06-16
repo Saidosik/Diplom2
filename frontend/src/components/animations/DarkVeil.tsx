@@ -106,31 +106,32 @@ void main() {
   float wave = sin((warped.x * 3.2 + warped.y * 1.25 + veilA * 1.8 + t * 0.28) * 3.14159);
   float ribbon = smoothstep(0.08, 0.95, abs(wave) * 0.78 + veilB * 0.42);
 
-  vec3 base = vec3(0.004, 0.014, 0.012);
-  vec3 emerald = vec3(0.02, 0.62, 0.34);
-  vec3 teal = vec3(0.02, 0.36, 0.50);
-  vec3 violet = vec3(0.28, 0.20, 0.62);
+  vec3 base = vec3(0.003, 0.010, 0.010);
+  vec3 emerald = vec3(0.018, 0.42, 0.24);
+  vec3 teal = vec3(0.014, 0.22, 0.30);
+  vec3 violet = vec3(0.17, 0.13, 0.38);
 
-  float topGlow = 1.0 - smoothstep(-1.0, 0.72, warped.y);
-  float sideGlow = 1.0 - smoothstep(0.12, 1.34, length(warped - vec2(0.62, -0.22)));
-  float leftGlow = 1.0 - smoothstep(0.0, 1.28, length(warped - vec2(-0.76, 0.12)));
+  float topGlow = 1.0 - smoothstep(-1.0, 0.66, warped.y);
+  float sideGlow = 1.0 - smoothstep(0.10, 1.36, length(warped - vec2(0.64, -0.24)));
+  float leftGlow = 1.0 - smoothstep(0.0, 1.34, length(warped - vec2(-0.78, 0.10)));
 
   vec3 color = base;
-  color += emerald * ribbon * 0.24;
-  color += teal * veilA * topGlow * 0.18;
-  color += violet * sideGlow * 0.22;
-  color += emerald * leftGlow * 0.12;
+  color += emerald * ribbon * 0.115;
+  color += teal * veilA * topGlow * 0.075;
+  color += violet * sideGlow * 0.09;
+  color += emerald * leftGlow * 0.055;
 
   color = hueRotate(color, radians(uHueShift));
 
   float scanline = sin((uv.y * uResolution.y) / max(uScanlineFrequency, 1.0) + t * 1.15) * 0.5 + 0.5;
-  color -= scanline * uScanlineIntensity * 0.45;
+  color -= scanline * uScanlineIntensity * 0.28;
 
   float grain = noise(uv * uResolution.xy * 0.62 + t * 3.0) - 0.5;
-  color += grain * uNoiseIntensity;
+  color += grain * uNoiseIntensity * 0.7;
 
   float vignette = smoothstep(1.28, 0.28, length((uv - 0.5) * vec2(1.35, 1.0)));
-  color *= 0.58 + vignette * 0.62;
+  color *= 0.46 + vignette * 0.52;
+  color *= 0.86;
 
   gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
 }
@@ -138,11 +139,11 @@ void main() {
 
 export default function DarkVeil({
     hueShift = 120,
-    noiseIntensity = 0.015,
-    scanlineIntensity = 0.02,
-    scanlineFrequency = 8,
-    speed = 0.28,
-    warpAmount = 0.08,
+    noiseIntensity = 0.006,
+    scanlineIntensity = 0.006,
+    scanlineFrequency = 10,
+    speed = 0.18,
+    warpAmount = 0.035,
     resolutionScale = 1,
     className,
 }: DarkVeilProps) {

@@ -97,7 +97,7 @@ export function AdminAiIndexPage({ canManageSystem = false }: { canManageSystem?
                 <Card>
                     <CardHeader>
                         <CardTitle>Конфигурация AI</CardTitle>
-                        <CardDescription>Эти значения берутся из Laravel AI SDK конфигурации и .env.</CardDescription>
+                        <CardDescription>Эти значения берутся из AI-настроек в БД, кешируются через Laravel Cache/Redis и используются RAG-индексом.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
                         <ConfigItem label="Chat" value={`${statusData.provider.chat_provider ?? "—"} / ${statusData.provider.chat_model ?? "—"}`} />

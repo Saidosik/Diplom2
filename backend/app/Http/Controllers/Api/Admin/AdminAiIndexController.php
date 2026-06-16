@@ -11,6 +11,7 @@ use App\Models\IssueAnswer;
 use App\Models\IssueQuestion;
 use App\Models\Publication;
 use App\Services\Ai\KnowledgeExtractorService;
+use App\Services\Ai\AiSettingsService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ use Illuminate\Validation\Rule;
 
 class AdminAiIndexController extends Controller
 {
-    public function status(): JsonResponse
+    public function status(AiSettingsService $settings): JsonResponse
     {
         $sourceCounts = $this->sourceCounts();
         $documentCounts = AiKnowledgeDocument::query()
@@ -57,10 +58,10 @@ class AdminAiIndexController extends Controller
                 'missing_by_type' => $missing,
                 'provider' => [
                     'chat_provider' => config('ai.provider'),
-                    'chat_model' => config('ai.models.chat'),
-                    'embedding_provider' => config('ai.embeddings.provider'),
-                    'embedding_model' => config('ai.embeddings.model'),
-                    'embedding_dimensions' => (int) config('ai.embeddings.dimensions', 1536),
+                    'chat_model' => $settings->defaultChatModelId(),
+                    'embedding_provider' => $settings->embeddingConfig()['provider'],
+                    'embedding_model' => $settings->embeddingConfig()['model'],
+                    'embedding_dimensions' => (int) $settings->embeddingConfig()['dimensions'],
                     'vector_driver' => config('ai.vector.driver'),
                     'rerank_enabled' => (bool) config('ai.rag.use_rerank'),
                 ],

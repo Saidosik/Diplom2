@@ -1,8 +1,8 @@
-import { AdminAiIndexPage } from "@/features/admin/components/admin-ai-index-page"
-import { canManageSystem, requireStaff } from "@/features/admin/server"
+import { requireSystemAdmin } from "@/features/admin/server"
+import { AdminAiDashboardPage } from "@/features/admin/components/admin-ai-dashboard-page"
 
 export default async function AdminAiPage() {
-    const user = await requireStaff()
+    await requireSystemAdmin()
 
-    return <AdminAiIndexPage canManageSystem={canManageSystem(user)} />
+    return <AdminAiDashboardPage />
 }

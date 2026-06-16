@@ -8,6 +8,7 @@ use App\Models\IssueAnswer;
 use App\Models\IssueQuestion;
 use App\Models\User;
 use App\Services\Ai\AiIndexingDispatcher;
+use App\Services\Ai\AiSettingsService;
 use App\Services\Ai\GroundedAnswerService;
 use App\Services\Ai\RagSearchService;
 use App\Services\Community\CommunityActivityService;
@@ -30,7 +31,7 @@ class GenerateAiQuestionAnswerJob implements ShouldQueue
     {
     }
 
-    public function handle(RagSearchService $search, GroundedAnswerService $answers, CommunityActivityService $community): void
+    public function handle(RagSearchService $search, GroundedAnswerService $answers, CommunityActivityService $community, AiSettingsService $settings): void
     {
         if (! (bool) config('ai.question_auto_answer.enabled', true)) {
             return;
@@ -55,7 +56,7 @@ class GenerateAiQuestionAnswerJob implements ShouldQueue
             'limit' => 8,
         ]);
 
-        $model = (string) (config('ai.chat_models.0.id') ?: config('ai.models.chat', 'gpt-4o-mini'));
+        $model = $settings->defaultChatModelId();
         $answer = $answers->answer($query, $rag['data'] ?? [], 'question_auto_answer', [
             'model' => $model,
         ]);

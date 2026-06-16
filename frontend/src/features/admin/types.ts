@@ -240,3 +240,58 @@ export type AdminTagStats = {
 export type AdminTagsResponse = Paginated<AdminTag> & {
     stats: AdminTagStats
 }
+
+export type AdminAiModelConfig = {
+    id: string
+    database_id: number
+    label: string
+    name: string
+    provider: string
+    description?: string | null
+    category?: string | null
+    enabled: boolean
+    use_for_chat: boolean
+    use_for_embeddings: boolean
+    use_for_rerank: boolean
+    default_for_chat: boolean
+    default_for_embeddings: boolean
+    default_for_rerank: boolean
+    context_length?: number | null
+    modality?: string | null
+    input_modalities?: string[]
+    output_modalities?: string[]
+    supported_parameters?: string[]
+    pricing?: Record<string, string | number | null>
+    system_prompt?: string | null
+    temperature?: number | null
+    max_tokens?: number | null
+    dimensions?: number | null
+    sort_order?: number
+    is_available?: boolean
+    last_seen_at?: string | null
+    updated_at?: string | null
+}
+
+export type AdminAiDashboard = {
+    stats: {
+        models_total: number
+        models_enabled: number
+        chat_models: number
+        embedding_models: number
+        sessions: number
+        messages: number
+        documents: number
+        chunks: number
+    }
+    defaults: {
+        chat_model: string
+        embedding: { provider: string; model: string; dimensions: number }
+        provider: string
+        configured: boolean
+    }
+    daily: Array<{ date: string; messages: number; sessions: number }>
+    models: Array<{ model: string; count: number }>
+    updated_at?: string
+}
+
+export type AdminAiPrompts = Record<"chat" | "rag" | "files" | "code" | "project" | "question_auto_answer", string>

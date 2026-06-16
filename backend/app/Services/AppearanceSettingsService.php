@@ -33,26 +33,26 @@ class AppearanceSettingsService
             'main' => [
                 'enabled' => true,
                 'effect' => 'dark-veil',
-                'intensity' => 0.18,
-                'speed' => 0.28,
-                'hueShift' => 120,
-                'noiseIntensity' => 0.014,
-                'scanlineIntensity' => 0.018,
-                'warpAmount' => 0.07,
-                'overlayOpacity' => 0.84,
-                'gridOpacity' => 0.08,
+                'intensity' => 0.1,
+                'speed' => 0.18,
+                'hueShift' => 118,
+                'noiseIntensity' => 0.006,
+                'scanlineIntensity' => 0.006,
+                'warpAmount' => 0.035,
+                'overlayOpacity' => 0.82,
+                'gridOpacity' => 0.035,
             ],
             'admin' => [
                 'enabled' => true,
                 'effect' => 'dark-veil',
-                'intensity' => 0.1,
-                'speed' => 0.16,
-                'hueShift' => 120,
-                'noiseIntensity' => 0.01,
-                'scanlineIntensity' => 0.012,
-                'warpAmount' => 0.04,
-                'overlayOpacity' => 0.9,
-                'gridOpacity' => 0.04,
+                'intensity' => 0.06,
+                'speed' => 0.12,
+                'hueShift' => 118,
+                'noiseIntensity' => 0.004,
+                'scanlineIntensity' => 0.004,
+                'warpAmount' => 0.025,
+                'overlayOpacity' => 0.88,
+                'gridOpacity' => 0.02,
             ],
         ];
     }
@@ -62,13 +62,23 @@ class AppearanceSettingsService
      */
     public function get(): array
     {
-        return Cache::rememberForever(self::CACHE_KEY, function () {
-            $setting = AppSetting::query()
-                ->where('key', self::SETTING_KEY)
-                ->first();
+        $cached = Cache::get(self::CACHE_KEY);
 
-            return $this->normalize(is_array($setting?->value) ? $setting->value : []);
-        });
+        if (is_array($cached)) {
+            $normalized = $this->normalize($cached);
+            Cache::forever(self::CACHE_KEY, $normalized);
+
+            return $normalized;
+        }
+
+        $setting = AppSetting::query()
+            ->where('key', self::SETTING_KEY)
+            ->first();
+
+        $normalized = $this->normalize(is_array($setting?->value) ? $setting->value : []);
+        Cache::forever(self::CACHE_KEY, $normalized);
+
+        return $normalized;
     }
 
     /**
@@ -108,9 +118,9 @@ class AppearanceSettingsService
         $defaults = $this->defaults();
 
         return [
-            'auth' => $this->normalizeScope(Arr::get($settings, 'auth', []), $defaults['auth']),
-            'main' => $this->normalizeScope(Arr::get($settings, 'main', []), $defaults['main']),
-            'admin' => $this->normalizeScope(Arr::get($settings, 'admin', []), $defaults['admin']),
+            'auth' => $this->normalizeScope('auth', Arr::get($settings, 'auth', []), $defaults['auth']),
+            'main' => $this->normalizeScope('main', Arr::get($settings, 'main', []), $defaults['main']),
+            'admin' => $this->normalizeScope('admin', Arr::get($settings, 'admin', []), $defaults['admin']),
         ];
     }
 
@@ -119,9 +129,11 @@ class AppearanceSettingsService
      * @param array<string, bool|float|string> $fallback
      * @return array<string, bool|float|string>
      */
-    private function normalizeScope(mixed $settings, array $fallback): array
+    private function normalizeScope(string $scope, mixed $settings, array $fallback): array
     {
         $source = is_array($settings) ? $settings : [];
+        [$overlayMin, $overlayMax] = $this->overlayLimits($scope);
+        [$gridMin, $gridMax] = $this->gridLimits($scope);
 
         return [
             'enabled' => $this->toBool($source['enabled'] ?? null, (bool) $fallback['enabled']),
@@ -132,9 +144,34 @@ class AppearanceSettingsService
             'noiseIntensity' => $this->toFloat($source['noiseIntensity'] ?? null, (float) $fallback['noiseIntensity'], 0, 0.12),
             'scanlineIntensity' => $this->toFloat($source['scanlineIntensity'] ?? null, (float) $fallback['scanlineIntensity'], 0, 0.14),
             'warpAmount' => $this->toFloat($source['warpAmount'] ?? null, (float) $fallback['warpAmount'], 0, 0.3),
-            'overlayOpacity' => $this->toFloat($source['overlayOpacity'] ?? null, (float) $fallback['overlayOpacity'], 0, 0.98),
-            'gridOpacity' => $this->toFloat($source['gridOpacity'] ?? null, (float) $fallback['gridOpacity'], 0, 0.35),
+            'overlayOpacity' => $this->toFloat($source['overlayOpacity'] ?? null, (float) $fallback['overlayOpacity'], $overlayMin, $overlayMax),
+            'gridOpacity' => $this->toFloat($source['gridOpacity'] ?? null, (float) $fallback['gridOpacity'], $gridMin, $gridMax),
         ];
+    }
+
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    private function overlayLimits(string $scope): array
+    {
+        return match ($scope) {
+            'main' => [0.68, 0.98],
+            'admin' => [0.76, 0.98],
+            default => [0.0, 0.98],
+        };
+    }
+
+    /**
+     * @return array{0: float, 1: float}
+     */
+    private function gridLimits(string $scope): array
+    {
+        return match ($scope) {
+            'main' => [0.0, 0.12],
+            'admin' => [0.0, 0.08],
+            default => [0.0, 0.25],
+        };
     }
 
     private function toBool(mixed $value, bool $fallback): bool

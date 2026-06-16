@@ -13,7 +13,9 @@ import {
     defaultAppearanceSettings,
     effectLabels,
     emitAppearanceSettingsUpdated,
+    gridLimitForScope,
     normalizeAppearanceSettings,
+    overlayLimitForScope,
     resetAppearanceSettings,
     scopeLabels,
     updateAppearanceSettings,
@@ -108,6 +110,8 @@ export function AdminAppearancePage() {
     const [isDirty, setIsDirty] = React.useState(false)
     const [isSaving, setIsSaving] = React.useState(false)
     const current = draft[activeScope]
+    const overlayLimit = overlayLimitForScope(activeScope)
+    const gridLimit = gridLimitForScope(activeScope)
 
     React.useEffect(() => {
         if (!isDirty) {
@@ -115,14 +119,27 @@ export function AdminAppearancePage() {
         }
     }, [settings, isDirty])
 
+    React.useEffect(() => {
+        return () => {
+            if (isDirty) {
+                emitAppearanceSettingsUpdated(settings)
+            }
+        }
+    }, [isDirty, settings])
+
     const updateScope = React.useCallback((scope: BackgroundScope, next: Partial<BackgroundScopeSettings>) => {
-        setDraft((currentDraft) => normalizeAppearanceSettings({
-            ...currentDraft,
-            [scope]: {
-                ...currentDraft[scope],
-                ...next,
-            },
-        }))
+        setDraft((currentDraft) => {
+            const normalized = normalizeAppearanceSettings({
+                ...currentDraft,
+                [scope]: {
+                    ...currentDraft[scope],
+                    ...next,
+                },
+            })
+
+            emitAppearanceSettingsUpdated(normalized)
+            return normalized
+        })
         setIsDirty(true)
     }, [])
 
@@ -162,6 +179,7 @@ export function AdminAppearancePage() {
         const fresh = await refresh()
         setDraft(fresh)
         setIsDirty(false)
+        emitAppearanceSettingsUpdated(fresh)
     }, [refresh])
 
     return (
@@ -197,7 +215,7 @@ export function AdminAppearancePage() {
             {isDirty ? (
                 <Card className="border-primary/30 bg-primary/5">
                     <CardContent className="py-4 text-sm text-primary">
-                        Есть несохранённые изменения. Предпросмотр справа обновляется сразу, но пользователи увидят настройки после сохранения.
+                        Есть несохранённые изменения. Живой предпросмотр применяется на этой странице сразу, а пользователи увидят настройки только после сохранения.
                     </CardContent>
                 </Card>
             ) : null}
@@ -260,7 +278,7 @@ export function AdminAppearancePage() {
                             <div className="grid gap-5 rounded-2xl border bg-background/50 p-4">
                                 <SliderField
                                     label="Интенсивность"
-                                    hint="Главная прозрачность эффекта. Для рабочих страниц лучше 8–20%."
+                                    hint="Главная прозрачность эффекта. Для рабочих страниц лучше 6–12%, для auth можно выше."
                                     value={current.intensity}
                                     min={0}
                                     max={1}
@@ -280,20 +298,20 @@ export function AdminAppearancePage() {
                                 />
                                 <SliderField
                                     label="Затемнение поверх фона"
-                                    hint="Повышайте значение, если фон начинает отвлекать от карточек и таблиц."
+                                    hint="Защитный слой для читабельности. В рабочих разделах ниже безопасного минимума опустить нельзя."
                                     value={current.overlayOpacity}
-                                    min={0}
-                                    max={0.98}
+                                    min={overlayLimit.min}
+                                    max={overlayLimit.max}
                                     step={0.01}
                                     format={formatPercent}
                                     onChange={(overlayOpacity) => updateScope(activeScope, { overlayOpacity })}
                                 />
                                 <SliderField
                                     label="Сетка"
-                                    hint="Тонкая техническая фактура интерфейса."
+                                    hint="Тонкая техническая фактура интерфейса. Для приложения и админки ограничена, чтобы не шумела."
                                     value={current.gridOpacity}
-                                    min={0}
-                                    max={0.35}
+                                    min={gridLimit.min}
+                                    max={gridLimit.max}
                                     step={0.01}
                                     format={formatPercent}
                                     onChange={(gridOpacity) => updateScope(activeScope, { gridOpacity })}
@@ -346,10 +364,10 @@ export function AdminAppearancePage() {
                             <div className="relative min-h-[360px] overflow-hidden rounded-2xl border bg-background shadow-2xl">
                                 <BackgroundRenderer scope={activeScope} settingsOverride={current} />
                                 <div className="relative z-10 flex min-h-[360px] flex-col justify-end p-5">
-                                    <Badge className="mb-auto w-fit">Предпросмотр</Badge>
+                                    <Badge className="mb-auto w-fit">Мини-превью</Badge>
                                     <h2 className="text-2xl font-semibold">{scopeLabels[activeScope]}</h2>
                                     <p className="mt-2 text-sm text-muted-foreground">
-                                        Так фон будет выглядеть за карточками, таблицами и рабочими блоками интерфейса.
+                                        Быстрая проверка фона в маленькой области. Полный живой предпросмотр уже применяется к текущей странице.
                                     </p>
                                     <div className="mt-4 grid gap-2 rounded-xl border bg-card/80 p-3 text-xs backdrop-blur">
                                         <div className="h-2 w-3/4 rounded-full bg-primary/40" />
@@ -363,7 +381,7 @@ export function AdminAppearancePage() {
                                 <CardHeader>
                                     <CardTitle>Рекомендация</CardTitle>
                                     <CardDescription>
-                                        Для всего приложения оптимально оставить Dark Veil с интенсивностью 12–18%, а для админки — 6–10%.
+                                        Для всего приложения оптимально оставить Dark Veil с интенсивностью 8–12%, а для админки — 4–8%. Затемнение лучше держать высоким, чтобы фон не спорил с таблицами и формами.
                                     </CardDescription>
                                 </CardHeader>
                             </Card>

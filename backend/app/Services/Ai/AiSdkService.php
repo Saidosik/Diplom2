@@ -15,6 +15,10 @@ use function Laravel\Ai\agent;
 
 class AiSdkService
 {
+    public function __construct(private readonly AiSettingsService $settings)
+    {
+    }
+
     /**
      * @param array<int, string> $inputs
      * @return array<int, array<int, float>>|null
@@ -31,9 +35,10 @@ class AiSdkService
             return null;
         }
 
-        $provider = (string) config('ai.embeddings.provider', config('ai.provider', 'openai'));
-        $model = (string) config('ai.embeddings.model', 'text-embedding-3-small');
-        $dimensions = (int) config('ai.embeddings.dimensions', 1536);
+        $embedding = $this->settings->embeddingConfig();
+        $provider = $embedding['provider'];
+        $model = $embedding['model'];
+        $dimensions = $embedding['dimensions'];
 
         try {
             $prompt = Embeddings::for($inputs)->dimensions($dimensions);
@@ -183,22 +188,21 @@ class AiSdkService
         return [
             'sdk' => class_exists(Embeddings::class),
             'provider' => config('ai.provider'),
-            'chat_model' => config('ai.models.chat'),
-            'embedding_provider' => config('ai.embeddings.provider'),
-            'embedding_model' => config('ai.embeddings.model'),
-            'embedding_dimensions' => config('ai.embeddings.dimensions'),
+            'chat_model' => $this->settings->defaultChatModelId(),
+            'embedding_provider' => $this->settings->embeddingConfig()['provider'],
+            'embedding_model' => $this->settings->embeddingConfig()['model'],
+            'embedding_dimensions' => $this->settings->embeddingConfig()['dimensions'],
             'reranking_enabled' => config('ai.reranking.enabled'),
             'reranking_provider' => config('ai.reranking.provider'),
             'vector_driver' => config('ai.vector.driver'),
             'external_generation_enabled' => $this->hasAnyProviderKey(),
             'provider_configured' => $this->hasProviderKey((string) config('ai.provider', 'openrouter')),
-            'chat_models' => collect(config('ai.chat_models', []))
-                ->map(fn ($model) => is_array($model) ? [
+            'chat_models' => collect($this->settings->chatModels())
+                ->map(fn (array $model) => [
                     'id' => $model['id'] ?? null,
                     'provider' => $model['provider'] ?? config('ai.provider'),
                     'default' => (bool) ($model['default'] ?? false),
-                ] : null)
-                ->filter()
+                ])
                 ->values()
                 ->all(),
         ];
@@ -220,7 +224,8 @@ class AiSdkService
     {
         $apiKey = (string) (config('ai.providers.openrouter.key') ?: '');
         $baseUrl = rtrim((string) (config('ai.providers.openrouter.url') ?: 'https://openrouter.ai/api/v1'), '/');
-        $model = (string) ($options['model'] ?? config('ai.models.chat'));
+        $model = (string) ($options['model'] ?? $this->settings->defaultChatModelId());
+        $generation = $this->settings->generationOptions($model);
         $timeout = max(1, (int) config('ai.generation.timeout', 40));
 
         if (trim($apiKey) === '' || $this->looksLikeUnexpandedEnvReference($apiKey)) {
@@ -267,8 +272,8 @@ class AiSdkService
                         ['role' => 'system', 'content' => $instructions],
                         ['role' => 'user', 'content' => $prompt],
                     ],
-                    'temperature' => (float) config('ai.generation.temperature', 0.2),
-                    'max_tokens' => (int) config('ai.generation.max_tokens', 1600),
+                    'temperature' => (float) ($options['temperature'] ?? $generation['temperature']),
+                    'max_tokens' => (int) ($options['max_tokens'] ?? $generation['max_tokens']),
                 ]);
         } catch (ConnectionException $exception) {
             Log::warning('OpenRouter text generation failed', [

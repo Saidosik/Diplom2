@@ -12,6 +12,7 @@ use App\Services\Ai\AiSdkService;
 use App\Services\Ai\GroundedAnswerService;
 use App\Services\Ai\KnowledgeExtractorService;
 use App\Services\Ai\RagSearchService;
+use App\Services\Ai\AiSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -29,15 +30,11 @@ class RagController extends Controller
         ]);
     }
 
-    public function models(): JsonResponse
+    public function models(AiSettingsService $settings): JsonResponse
     {
-        $models = collect(config('ai.chat_models', []))
-            ->filter(fn ($model) => is_array($model) && ! empty($model['id']))
-            ->unique('id')
-            ->values()
-            ->all();
+        $settings->seedDefaultsIfNeeded();
 
-        return response()->json(['data' => $models]);
+        return response()->json(['data' => $settings->chatModels()]);
     }
 
     public function search(Request $request, RagSearchService $search): JsonResponse
@@ -389,24 +386,17 @@ class RagController extends Controller
      */
     private function allowedModelIds(): array
     {
-        return collect(config('ai.chat_models', []))
-            ->pluck('id')
-            ->filter()
-            ->values()
-            ->all();
+        return app(AiSettingsService::class)->allowedChatModelIds();
     }
 
     private function defaultModelId(): string
     {
-        return (string) (config('ai.chat_models.0.id') ?: config('ai.models.chat', 'gpt-4o-mini'));
+        return app(AiSettingsService::class)->defaultChatModelId();
     }
 
     private function providerForModel(?string $model): string
     {
-        $configured = collect(config('ai.chat_models', []))
-            ->first(fn ($item) => is_array($item) && ($item['id'] ?? null) === $model);
-
-        return (string) (($configured['provider'] ?? null) ?: config('ai.provider', 'openrouter'));
+        return app(AiSettingsService::class)->providerForModel($model);
     }
 
     /**

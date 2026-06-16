@@ -159,3 +159,33 @@ export async function deleteAdminTag(id: number) {
     const response = await browserApi.delete<{ message: string }>(`/laravel/admin/tags/${id}`)
     return response.data
 }
+
+export async function getAdminAiDashboard() {
+    const response = await browserApi.get<{ data: import("./types").AdminAiDashboard }>("/laravel/admin/ai/dashboard")
+    return response.data.data
+}
+
+export async function getAdminAiModels(params?: { q?: string; usage?: string; enabled?: string }) {
+    const response = await browserApi.get<{ data: import("./types").AdminAiModelConfig[]; meta: import("./types").AdminAiDashboard }>("/laravel/admin/ai/models", { params })
+    return response.data
+}
+
+export async function syncAdminAiModels(payload: { limit?: number } = {}) {
+    const response = await browserApi.post<{ message: string; data: { synced: number; total_remote?: number; error?: string; message?: string } }>("/laravel/admin/ai/models/sync", payload)
+    return response.data
+}
+
+export async function updateAdminAiModel(databaseId: number, payload: Partial<import("./types").AdminAiModelConfig>) {
+    const response = await browserApi.patch<{ message: string; data: import("./types").AdminAiModelConfig }>(`/laravel/admin/ai/models/${databaseId}`, payload)
+    return response.data.data
+}
+
+export async function getAdminAiPrompts() {
+    const response = await browserApi.get<{ data: import("./types").AdminAiPrompts; defaults: import("./types").AdminAiPrompts }>("/laravel/admin/ai/prompts")
+    return response.data
+}
+
+export async function updateAdminAiPrompts(payload: Partial<import("./types").AdminAiPrompts>) {
+    const response = await browserApi.patch<{ message: string; data: import("./types").AdminAiPrompts }>("/laravel/admin/ai/prompts", payload)
+    return response.data.data
+}

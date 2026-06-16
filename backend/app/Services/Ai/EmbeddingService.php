@@ -6,7 +6,7 @@ use Illuminate\Support\Str;
 
 class EmbeddingService
 {
-    public function __construct(private readonly AiSdkService $sdk)
+    public function __construct(private readonly AiSdkService $sdk, private readonly AiSettingsService $settings)
     {
     }
 
@@ -65,7 +65,7 @@ class EmbeddingService
 
     public function dimensions(): int
     {
-        return max(32, (int) config('ai.embeddings.dimensions', 1536));
+        return max(32, (int) $this->settings->embeddingConfig()['dimensions']);
     }
 
     /**

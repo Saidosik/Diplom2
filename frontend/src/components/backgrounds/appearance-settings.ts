@@ -49,26 +49,26 @@ export const defaultAppearanceSettings: AppearanceSettings = {
     main: {
         enabled: true,
         effect: "dark-veil",
-        intensity: 0.18,
-        speed: 0.28,
-        hueShift: 120,
-        noiseIntensity: 0.014,
-        scanlineIntensity: 0.018,
-        warpAmount: 0.07,
-        overlayOpacity: 0.84,
-        gridOpacity: 0.08,
+        intensity: 0.1,
+        speed: 0.18,
+        hueShift: 118,
+        noiseIntensity: 0.006,
+        scanlineIntensity: 0.006,
+        warpAmount: 0.035,
+        overlayOpacity: 0.82,
+        gridOpacity: 0.035,
     },
     admin: {
         enabled: true,
         effect: "dark-veil",
-        intensity: 0.1,
-        speed: 0.16,
-        hueShift: 120,
-        noiseIntensity: 0.01,
-        scanlineIntensity: 0.012,
-        warpAmount: 0.04,
-        overlayOpacity: 0.9,
-        gridOpacity: 0.04,
+        intensity: 0.06,
+        speed: 0.12,
+        hueShift: 118,
+        noiseIntensity: 0.004,
+        scanlineIntensity: 0.004,
+        warpAmount: 0.025,
+        overlayOpacity: 0.88,
+        gridOpacity: 0.02,
     },
 }
 
@@ -91,8 +91,26 @@ function toEffect(value: unknown, fallback: BackgroundEffect): BackgroundEffect 
         : fallback
 }
 
-function normalizeScopeSettings(value: unknown, fallback: BackgroundScopeSettings): BackgroundScopeSettings {
+const overlayLimits: Record<BackgroundScope, { min: number; max: number }> = {
+    auth: { min: 0, max: 0.98 },
+    main: { min: 0.68, max: 0.98 },
+    admin: { min: 0.76, max: 0.98 },
+}
+
+const gridLimits: Record<BackgroundScope, { min: number; max: number }> = {
+    auth: { min: 0, max: 0.25 },
+    main: { min: 0, max: 0.12 },
+    admin: { min: 0, max: 0.08 },
+}
+
+function normalizeScopeSettings(
+    value: unknown,
+    fallback: BackgroundScopeSettings,
+    scope: BackgroundScope
+): BackgroundScopeSettings {
     const source = isRecord(value) ? value : {}
+    const overlay = overlayLimits[scope]
+    const grid = gridLimits[scope]
 
     return {
         enabled: toBoolean(source.enabled, fallback.enabled),
@@ -103,8 +121,8 @@ function normalizeScopeSettings(value: unknown, fallback: BackgroundScopeSetting
         noiseIntensity: toNumber(source.noiseIntensity, fallback.noiseIntensity, 0, 0.12),
         scanlineIntensity: toNumber(source.scanlineIntensity, fallback.scanlineIntensity, 0, 0.14),
         warpAmount: toNumber(source.warpAmount, fallback.warpAmount, 0, 0.3),
-        overlayOpacity: toNumber(source.overlayOpacity, fallback.overlayOpacity, 0, 0.98),
-        gridOpacity: toNumber(source.gridOpacity, fallback.gridOpacity, 0, 0.35),
+        overlayOpacity: toNumber(source.overlayOpacity, fallback.overlayOpacity, overlay.min, overlay.max),
+        gridOpacity: toNumber(source.gridOpacity, fallback.gridOpacity, grid.min, grid.max),
     }
 }
 
@@ -112,10 +130,18 @@ export function normalizeAppearanceSettings(value: unknown): AppearanceSettings 
     const source = isRecord(value) ? value : {}
 
     return {
-        auth: normalizeScopeSettings(source.auth, defaultAppearanceSettings.auth),
-        main: normalizeScopeSettings(source.main, defaultAppearanceSettings.main),
-        admin: normalizeScopeSettings(source.admin, defaultAppearanceSettings.admin),
+        auth: normalizeScopeSettings(source.auth, defaultAppearanceSettings.auth, "auth"),
+        main: normalizeScopeSettings(source.main, defaultAppearanceSettings.main, "main"),
+        admin: normalizeScopeSettings(source.admin, defaultAppearanceSettings.admin, "admin"),
     }
+}
+
+export function overlayLimitForScope(scope: BackgroundScope) {
+    return overlayLimits[scope]
+}
+
+export function gridLimitForScope(scope: BackgroundScope) {
+    return gridLimits[scope]
 }
 
 function unwrapSettingsPayload(payload: unknown): AppearanceSettings {

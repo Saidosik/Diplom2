@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminAiIndexController;
+use App\Http\Controllers\Api\Admin\AdminAiModelController;
 use App\Http\Controllers\Api\Admin\AdminAppearanceController;
 use App\Http\Controllers\Api\AppearanceController;
 use App\Http\Controllers\Api\Admin\AdminChatModerationController;
@@ -281,11 +282,17 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
         Route::get('/appearance', [AdminAppearanceController::class, 'show'])->middleware('system_admin');
         Route::match(['put', 'patch'], '/appearance', [AdminAppearanceController::class, 'update'])->middleware('system_admin');
         Route::post('/appearance/reset', [AdminAppearanceController::class, 'reset'])->middleware('system_admin');
-        Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
-        Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
+        Route::get('/ai/dashboard', [AdminAiModelController::class, 'dashboard'])->middleware('system_admin');
+        Route::get('/ai/models', [AdminAiModelController::class, 'models'])->middleware('system_admin');
+        Route::get('/ai/prompts', [AdminAiModelController::class, 'prompts'])->middleware('system_admin');
+        Route::get('/ai/index/status', [AdminAiIndexController::class, 'status'])->middleware('system_admin');
+        Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents'])->middleware('system_admin');
 
         Route::middleware('system_admin')->group(function () {
             Route::get('/logs', [AdminLogController::class, 'index']);
+            Route::post('/ai/models/sync', [AdminAiModelController::class, 'sync']);
+            Route::patch('/ai/models/{model}', [AdminAiModelController::class, 'updateModel']);
+            Route::patch('/ai/prompts', [AdminAiModelController::class, 'updatePrompts']);
             Route::post('/ai/index/rebuild', [AdminAiIndexController::class, 'rebuild']);
             Route::post('/ai/index/reindex-stale', [AdminAiIndexController::class, 'reindexStale']);
             Route::post('/ai/index/reindex-source', [AdminAiIndexController::class, 'reindexSource']);
