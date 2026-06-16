@@ -4,52 +4,32 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "@tanstack/react-form"
-import * as z from "zod"
-import { Eye, EyeOff, LoaderCircle } from "lucide-react"
+import { KeyRound, LoaderCircle } from "lucide-react"
 
+import { AuthCard } from "@/components/auth/AuthCard"
+import { PasswordField } from "@/components/auth/PasswordField"
 import { Button } from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
-import {
-    Field,
-    FieldError,
-    FieldGroup,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-
-import { browserApi } from "@/lib/http/browser"
+import { passwordResetSchema, type PasswordResetSchema } from "@/features/auth/schemas"
 import { safeRequest } from "@/lib/http/api-errors"
-import { passwordResetSchema, PasswordResetSchema } from "@/features/auth/schemas"
+import { browserApi } from "@/lib/http/browser"
 
 type PasswordResetFormProps = {
     email: string
     token: string
 }
 
-
 async function resetPassword(payload: PasswordResetSchema) {
     const response = await browserApi.post("/auth/reset-password", payload)
     return response.data
 }
 
-export function PasswordResetForm({
-    email,
-    token,
-}: PasswordResetFormProps) {
+export function PasswordResetForm({ email, token }: PasswordResetFormProps) {
     const router = useRouter()
-
     const [error, setError] = React.useState("")
     const [success, setSuccess] = React.useState("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
-    const [showPassword, setShowPassword] = React.useState(false)
-    const [showPasswordConfirmation, setShowPasswordConfirmation] =
-        React.useState(false)
 
     const form = useForm({
         defaultValues: {
@@ -67,22 +47,15 @@ export function PasswordResetForm({
 
             try {
                 setIsSubmitting(true)
-
                 const result = await safeRequest(resetPassword(value))
 
                 if (!result.success) {
-                    setError(
-                        result.error?.message ??
-                        "Не удалось изменить пароль"
-                    )
+                    setError(result.error?.message ?? "Не удалось изменить пароль")
                     return
                 }
 
-                setSuccess("Пароль успешно изменён. Теперь можно войти в аккаунт.")
-
-                setTimeout(() => {
-                    router.push("/auth?mode=login")
-                }, 1500)
+                setSuccess("Пароль успешно изменён. Сейчас перенаправим вас ко входу.")
+                setTimeout(() => router.push("/auth?mode=login"), 1500)
             } catch (errorResponse) {
                 console.log("[PASSWORD_RESET_ERROR]", errorResponse)
                 setError("Произошла неизвестная ошибка")
@@ -94,103 +67,77 @@ export function PasswordResetForm({
 
     return (
         <>
-        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
-            <CardHeader>
-                <CardTitle>
-                    <h1>Новый пароль</h1>
-                </CardTitle>
+            <AuthCard
+                eyebrow="Новый пароль"
+                title="Смена пароля"
+                icon={<KeyRound className="size-5" />}
+                description={
+                    <>
+                        Придумайте новый пароль для аккаунта{" "}
+                        <span className="font-medium text-slate-200">{email}</span>.
+                    </>
+                }
+                footer={
+                    <>
+                        <Button
+                            type="submit"
+                            form="PasswordResetForm"
+                            disabled={isSubmitting || Boolean(success)}
+                            className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                        >
+                            {isSubmitting ? "Сохраняем пароль" : "Сменить пароль"}
+                            {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
+                        </Button>
 
-                <CardDescription>
-                    Придумайте новый пароль для аккаунта{" "}
-                    <span className="font-medium text-foreground">
-                        {email}
-                    </span>
-                    .
-                </CardDescription>
-            </CardHeader>
+                        {error && (
+                            <div className="border border-destructive/20 bg-destructive/10 p-3 text-center text-sm text-destructive">
+                                {error}
+                            </div>
+                        )}
 
-            <CardContent>
+                        {success && (
+                            <div className="border border-emerald-400/20 bg-emerald-500/10 p-3 text-center text-sm text-emerald-300">
+                                {success}
+                            </div>
+                        )}
+                    </>
+                }
+            >
                 <form
                     id="PasswordResetForm"
+                    className="space-y-5"
                     onSubmit={async (event) => {
                         event.preventDefault()
                         await form.handleSubmit()
                     }}
                 >
-                    <input
-                        type="hidden"
-                        name="email"
-                        value={form.state.values.email}
-                        readOnly
-                    />
+                    <input type="hidden" name="email" value={form.state.values.email} readOnly />
+                    <input type="hidden" name="token" value={form.state.values.token} readOnly />
 
-                    <input
-                        type="hidden"
-                        name="token"
-                        value={form.state.values.token}
-                        readOnly
-                    />
+                    <FieldGroup className="gap-4">
+                        <Field>
+                            <FieldLabel>Email</FieldLabel>
+                            <Input value={email} readOnly aria-readonly className="text-slate-400" />
+                        </Field>
 
-                    <FieldGroup>
                         <form.Field name="password">
                             {(field) => {
-                                const isInvalid =
-                                    field.state.meta.isTouched &&
-                                    !field.state.meta.isValid
+                                const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
 
                                 return (
                                     <Field data-invalid={isInvalid}>
-                                        <div className="relative">
-                                            <Input
-                                                id={field.name}
-                                                name={field.name}
-                                                type={
-                                                    showPassword
-                                                        ? "text"
-                                                        : "password"
-                                                }
-                                                value={field.state.value}
-                                                onBlur={field.handleBlur}
-                                                onChange={(event) =>
-                                                    field.handleChange(
-                                                        event.target.value
-                                                    )
-                                                }
-                                                aria-invalid={isInvalid}
-                                                placeholder="Новый пароль"
-                                                autoComplete="new-password"
-                                                className="pr-10"
-                                            />
-
-                                            <button
-                                                type="button"
-                                                className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                                                onClick={() =>
-                                                    setShowPassword(
-                                                        (value) => !value
-                                                    )
-                                                }
-                                                aria-label={
-                                                    showPassword
-                                                        ? "Скрыть пароль"
-                                                        : "Показать пароль"
-                                                }
-                                            >
-                                                {showPassword ? (
-                                                    <EyeOff className="h-4 w-4" />
-                                                ) : (
-                                                    <Eye className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        </div>
-
-                                        {isInvalid && (
-                                            <FieldError
-                                                errors={
-                                                    field.state.meta.errors
-                                                }
-                                            />
-                                        )}
+                                        <FieldLabel htmlFor={field.name}>Новый пароль</FieldLabel>
+                                        <PasswordField
+                                            id={field.name}
+                                            name={field.name}
+                                            value={field.state.value}
+                                            onBlur={field.handleBlur}
+                                            onChange={(event) => field.handleChange(event.target.value)}
+                                            aria-invalid={isInvalid}
+                                            placeholder="Минимум 8 символов"
+                                            autoComplete="new-password"
+                                        />
+                                        {isInvalid && <FieldError errors={field.state.meta.errors} />}
                                     </Field>
                                 )
                             }}
@@ -198,106 +145,36 @@ export function PasswordResetForm({
 
                         <form.Field name="password_confirmation">
                             {(field) => {
-                                const isInvalid =
-                                    field.state.meta.isTouched &&
-                                    !field.state.meta.isValid
+                                const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
 
                                 return (
                                     <Field data-invalid={isInvalid}>
-                                        <div className="relative">
-                                            <Input
-                                                id={field.name}
-                                                name={field.name}
-                                                type={
-                                                    showPasswordConfirmation
-                                                        ? "text"
-                                                        : "password"
-                                                }
-                                                value={field.state.value}
-                                                onBlur={field.handleBlur}
-                                                onChange={(event) =>
-                                                    field.handleChange(
-                                                        event.target.value
-                                                    )
-                                                }
-                                                aria-invalid={isInvalid}
-                                                placeholder="Повторите пароль"
-                                                autoComplete="new-password"
-                                                className="pr-10"
-                                            />
-
-                                            <button
-                                                type="button"
-                                                className="absolute right-3 top-2.5 text-slate-400 hover:text-white"
-                                                onClick={() =>
-                                                    setShowPasswordConfirmation(
-                                                        (value) => !value
-                                                    )
-                                                }
-                                                aria-label={
-                                                    showPasswordConfirmation
-                                                        ? "Скрыть пароль"
-                                                        : "Показать пароль"
-                                                }
-                                            >
-                                                {showPasswordConfirmation ? (
-                                                    <EyeOff className="h-4 w-4" />
-                                                ) : (
-                                                    <Eye className="h-4 w-4" />
-                                                )}
-                                            </button>
-                                        </div>
-
-                                        {isInvalid && (
-                                            <FieldError
-                                                errors={
-                                                    field.state.meta.errors
-                                                }
-                                            />
-                                        )}
+                                        <FieldLabel htmlFor={field.name}>Повторите пароль</FieldLabel>
+                                        <PasswordField
+                                            id={field.name}
+                                            name={field.name}
+                                            value={field.state.value}
+                                            onBlur={field.handleBlur}
+                                            onChange={(event) => field.handleChange(event.target.value)}
+                                            aria-invalid={isInvalid}
+                                            placeholder="Ещё раз"
+                                            autoComplete="new-password"
+                                        />
+                                        {isInvalid && <FieldError errors={field.state.meta.errors} />}
                                     </Field>
                                 )
                             }}
                         </form.Field>
                     </FieldGroup>
                 </form>
-            </CardContent>
+            </AuthCard>
 
-            <CardFooter>
-                <Field orientation="vertical" className="w-full">
-                    <Button
-                        type="submit"
-                        form="PasswordResetForm"
-                        disabled={isSubmitting || Boolean(success)}
-                        className="w-full"
-                    >
-                        {isSubmitting ? "Сохраняем пароль" : "Сменить пароль"}
-
-                        {isSubmitting && (
-                            <LoaderCircle className="animate-spin" />
-                        )}
-                    </Button>
-
-                    {error && (
-                        <div className="rounded-md bg-destructive/10 p-3 text-center text-sm text-destructive">
-                            {error}
-                        </div>
-                    )}
-
-                    {success && (
-                        <div className="rounded-md bg-emerald-500/10 p-3 text-center text-sm text-emerald-600 dark:text-emerald-400">
-                            {success}
-                        </div>
-                    )}
-
-
-                </Field>
-            </CardFooter>
-        </Card>
-        <p className="mt-4 text-center text-sm text-slate-400">
-            Вспомнили пароль?{" "}
-            <Link href="/auth?mode=login" className="text-primary">Войти</Link>
-        </p>
+            <p className="mt-5 text-center text-sm text-slate-400">
+                Вспомнили пароль?{" "}
+                <Link href="/auth?mode=login" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Войти
+                </Link>
+            </p>
         </>
     )
 }

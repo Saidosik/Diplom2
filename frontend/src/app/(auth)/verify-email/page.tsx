@@ -7,17 +7,9 @@ import { motion } from "framer-motion"
 import { LoaderCircle, LogOut, MailCheck, RefreshCcw } from "lucide-react"
 import { toast } from "sonner"
 
+import { AuthCard } from "@/components/auth/AuthCard"
 import { Button } from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
-import { resendEmailVerification, logout } from "@/features/auth/api"
-import { getMe } from "@/features/auth/api"
+import { getMe, logout, resendEmailVerification } from "@/features/auth/api"
 import { safeRequest } from "@/lib/http/api-errors"
 
 const COOLDOWN_SECONDS = 60
@@ -91,70 +83,65 @@ function VerifyEmail() {
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="w-full"
         >
-            <Card className="rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
-                <CardHeader className="text-center">
-                    <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-primary/10 text-primary">
-                        {isChecking ? <LoaderCircle className="size-6 animate-spin" /> : <MailCheck className="size-6" />}
-                    </div>
-                    <CardTitle className="text-2xl">Подтвердите email</CardTitle>
-                    <CardDescription className="text-base text-slate-400">
-                        Мы отправили письмо с подтверждением на ваш email.
-                    </CardDescription>
-                </CardHeader>
+            <AuthCard
+                eyebrow="Email verification"
+                title="Подтвердите email"
+                icon={isChecking ? <LoaderCircle className="size-5 animate-spin" /> : <MailCheck className="size-5" />}
+                description="Мы отправили письмо с подтверждением. После перехода по ссылке станут доступны публикации, чаты и AI-разделы."
+                footer={
+                    <>
+                        <Button
+                            type="button"
+                            className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                            onClick={handleResend}
+                            disabled={isResending || cooldown > 0 || isChecking}
+                        >
+                            {isResending ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+                            {cooldown > 0 ? `Отправить повторно через ${cooldown} сек.` : "Отправить письмо повторно"}
+                        </Button>
 
-                <CardContent className="space-y-4 text-center">
-                    <div className="rounded-xl border border-white/10 bg-[#0c1711] px-4 py-3 text-sm">
-                        <p className="text-slate-400">Адрес для подтверждения</p>
+                        <Button type="button" variant="outline" className="h-11 w-full !rounded-2xl border-white/10 bg-white/[0.045]" onClick={handleLogout}>
+                            <LogOut className="size-4" />
+                            Выйти
+                        </Button>
+
+                        <Button asChild variant="link" className="text-slate-400">
+                            <Link href="/auth?mode=login">Вернуться ко входу</Link>
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-4 text-center">
+                    <div className="border border-white/10 bg-white/[0.04] px-4 py-3 text-sm">
+                        <p className="text-slate-500">Адрес для подтверждения</p>
                         <p className="mt-1 break-all font-medium text-white">{safeEmail}</p>
                     </div>
 
-                    <p className="text-sm text-slate-400">
-                        Перейдите по ссылке из письма. Проверьте папку “Спам”, если письмо не пришло.
+                    <p className="text-sm leading-6 text-slate-400">
+                        Проверьте входящие и папку “Спам”. Если письмо не пришло, запросите отправку повторно.
                     </p>
-                </CardContent>
-
-                <CardFooter className="flex flex-col gap-3">
-                    <Button
-                        type="button"
-                        className="w-full"
-                        onClick={handleResend}
-                        disabled={isResending || cooldown > 0 || isChecking}
-                    >
-                        {isResending ? (
-                            <LoaderCircle className="size-4 animate-spin" />
-                        ) : (
-                            <RefreshCcw className="size-4" />
-                        )}
-                        {cooldown > 0 ? `Отправить повторно через ${cooldown} сек.` : "Отправить письмо повторно"}
-                    </Button>
-
-                    <Button type="button" variant="outline" className="w-full" onClick={handleLogout}>
-                        <LogOut className="size-4" />
-                        Выйти
-                    </Button>
-
-                    <Button asChild variant="link" className="text-slate-400">
-                        <Link href="/auth?mode=login">Вернуться ко входу</Link>
-                    </Button>
-                </CardFooter>
-            </Card>
+                </div>
+            </AuthCard>
         </motion.div>
     )
 }
 
 export default function VerifyEmailPage() {
     return (
-        <Suspense fallback={
-            <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
-                <CardHeader className="text-center">
-                    <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-2xl border bg-background">
-                        <LoaderCircle className="size-5 animate-spin text-slate-400" />
+        <Suspense
+            fallback={
+                <AuthCard
+                    eyebrow="Загрузка"
+                    title="Подготавливаем страницу"
+                    icon={<LoaderCircle className="size-5 animate-spin" />}
+                    description="Проверяем статус подтверждения email."
+                >
+                    <div className="h-2 overflow-hidden bg-white/10">
+                        <div className="h-full w-1/2 animate-pulse bg-primary" />
                     </div>
-                    <CardTitle>Загрузка</CardTitle>
-                    <CardDescription>Подготавливаем страницу подтверждения email.</CardDescription>
-                </CardHeader>
-            </Card>
-        }>
+                </AuthCard>
+            }
+        >
             <VerifyEmail />
         </Suspense>
     )
