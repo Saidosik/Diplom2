@@ -19,6 +19,7 @@ import { SiteBrand } from "@/components/layout/site-brand"
 import { NotificationsBell } from "@/components/layout/notifications-bell"
 import { UserAvatar } from "@/features/users/components/user-avatar"
 import { getUserRoleLabel } from "@/features/users/lib/user-display"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 import { logout } from "@/features/auth/api"
 import { notifySessionChanged } from "@/lib/auth/session-events"
 import { safeRequest } from "@/lib/http/api-errors"
@@ -129,6 +130,7 @@ function HeaderSearchForm() {
 function HeaderUserMenu({ user }: { user: User }) {
     const router = useRouter()
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+    const profileHref = getUserProfileHrefOrFallback(user)
 
     async function handleLogout() {
         try {
@@ -194,7 +196,7 @@ function HeaderUserMenu({ user }: { user: User }) {
                 <DropdownMenuSeparator />
 
                 <DropdownMenuItem asChild>
-                    <Link href="/profile">
+                    <Link href={profileHref}>
                         <UserRound />
                         Профиль
                     </Link>

@@ -8,12 +8,15 @@ import type { User } from "@/features/auth/types"
 import { ProfileSettingsCard } from "@/features/profile/components/profile-settings-card"
 import { SettingsAppearanceCard } from "@/features/settings/components/settings-appearance-card"
 import { SettingsNotificationCard } from "@/features/settings/components/settings-notification-card"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export function SettingsPageContent({ user }: { user: User }) {
+    const profileHref = getUserProfileHrefOrFallback(user)
+
     return (
         <main className="mx-auto flex w-full max-w-7xl flex-col gap-6">
             <section className="border bg-card p-6 shadow-sm md:p-8">
@@ -36,7 +39,7 @@ export function SettingsPageContent({ user }: { user: User }) {
 
                     <div className="flex flex-wrap gap-2">
                         <Button asChild variant="outline">
-                            <Link href="/profile">
+                            <Link href={profileHref}>
                                 <UserRound className="size-4" />
                                 Открыть профиль
                             </Link>

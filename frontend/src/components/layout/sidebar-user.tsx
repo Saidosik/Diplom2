@@ -19,6 +19,7 @@ import { UserAvatar } from "@/features/users/components/user-avatar"
 import {
     getUserRoleLabel,
 } from "@/features/users/lib/user-display"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -45,6 +46,7 @@ export function SidebarUser({ user }: SidebarUserProps) {
     const router = useRouter()
     const [isLoggingOut, setIsLoggingOut] = React.useState(false)
     const { isMobile, setOpenMobile } = useSidebar()
+    const profileHref = getUserProfileHrefOrFallback(user)
 
     function closeMobileSidebar() {
         if (isMobile) {
@@ -174,7 +176,7 @@ export function SidebarUser({ user }: SidebarUserProps) {
                         <DropdownMenuSeparator />
 
                         <DropdownMenuItem asChild>
-                            <Link href="/profile" onClick={closeMobileSidebar}>
+                            <Link href={profileHref} onClick={closeMobileSidebar}>
                                 <UserRound />
                                 Профиль
                             </Link>
