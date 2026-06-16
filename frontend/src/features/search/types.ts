@@ -13,6 +13,7 @@ export type SearchResult = {
     author?: {
         id: number
         name: string
+        username?: string | null
         reputation_score?: number | null
     } | null
     tags?: Array<{

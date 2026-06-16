@@ -15,6 +15,7 @@ import { SubscribeButton } from "@/features/community/components/subscribe-butto
 import { TagBadge } from "@/features/tags/components/tag-badge"
 import { formatPublicationDate, getPublicationTypeLabel } from "@/features/publications/lib/publication-labels"
 import type { Publication } from "@/features/publications/types"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 type PublicationDetailPageProps = {
     publication: Publication
@@ -84,7 +85,7 @@ export function PublicationDetailPage({ publication, isAuthenticated = false }: 
                         <span className="inline-flex items-center gap-1.5">
                             <PenLine className="size-4" />
                             {publication.author?.id ? (
-                                <Link href={`/users/${publication.author.id}`} className="hover:text-primary hover:underline">
+                                <Link href={getUserProfileHrefOrFallback(publication.author)} className="hover:text-primary hover:underline">
                                     {publication.author.name || "Автор"}
                                 </Link>
                             ) : (

@@ -10,6 +10,7 @@ import type { CommunityDiscovery, CommunityOverview, CommunityTag, CommunityTopU
 import type { IssueQuestion } from "@/features/issues/types"
 import type { Publication } from "@/features/publications/types"
 import { TagBadge } from "@/features/tags/components/tag-badge"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -231,7 +232,7 @@ function TrendTagRow({ tag, index }: { tag: CommunityTag; index: number }) {
 
 function TrendUserRow({ user, index }: { user: CommunityTopUser; index: number }) {
     return (
-        <Link href={`/users/${user.id}`} className="flex items-center justify-between gap-3 border bg-background/45 p-3 transition-colors hover:border-primary/50 hover:bg-muted/40">
+        <Link href={getUserProfileHrefOrFallback(user)} className="flex items-center justify-between gap-3 border bg-background/45 p-3 transition-colors hover:border-primary/50 hover:bg-muted/40">
             <div className="flex min-w-0 items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center border bg-primary/10 text-xs font-semibold text-primary">{index}</span>
                 <div className="min-w-0">

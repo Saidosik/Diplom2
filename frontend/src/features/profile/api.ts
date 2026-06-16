@@ -16,6 +16,7 @@ export type ProfileHubItem = {
     type: ProfileHubKind
     title?: string | null
     name?: string | null
+    username?: string | null
     headline?: string | null
     excerpt?: string | null
     description?: string | null

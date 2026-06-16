@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { AiSearchPanel } from "@/features/search/components/ai-search-panel"
 import { TagBadge } from "@/features/tags/components/tag-badge"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 const filters: Array<{ label: string; value: SearchFilterType }> = [
     { label: "Все", value: "all" },
@@ -296,7 +297,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
                             ))}
                             <Badge variant="outline">{Math.round(result.score)} баллов</Badge>
                         </div>
-                        <Link href={result.href} className="group inline-flex items-start gap-2 text-lg font-medium leading-snug hover:text-primary">
+                        <Link href={result.type === "user" ? getUserProfileHrefOrFallback({ id: result.id, username: typeof result.meta?.username === "string" ? result.meta.username : null }) : result.href} className="group inline-flex items-start gap-2 text-lg font-medium leading-snug hover:text-primary">
                             <span>{result.title}</span>
                             <ArrowRight className="mt-1 size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
                         </Link>
@@ -308,7 +309,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
             </CardHeader>
             <CardContent className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 {result.author ? (
-                    <Link href={`/users/${result.author.id}`} className="hover:text-primary">
+                    <Link href={getUserProfileHrefOrFallback(result.author)} className="hover:text-primary">
                         {result.author.name}
                     </Link>
                 ) : null}

@@ -19,6 +19,7 @@ export type ReputationLevel = {
 export type CommunityTopUser = {
     id: number
     name: string
+    username?: string | null
     role?: string | null
     headline?: string | null
     bio?: string | null
@@ -56,6 +57,7 @@ export type CommunityActivity = {
     actor?: {
         id: number
         name: string
+        username?: string | null
         role?: string | null
         headline?: string | null
         reputation_score?: number
