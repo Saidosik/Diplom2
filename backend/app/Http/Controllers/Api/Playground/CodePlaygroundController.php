@@ -146,6 +146,8 @@ class CodePlaygroundController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
+        $runs->getCollection()->transform(fn (CodeRun $run) => $this->refreshRunState($run));
+
         return CodeRunResource::collection($runs);
     }
 
@@ -153,7 +155,7 @@ class CodePlaygroundController extends Controller
     {
         abort_unless((int) $codeRun->user_id === (int) $request->user()->id, 403);
 
-        return new CodeRunResource($codeRun->load('snippet'));
+        return new CodeRunResource($this->refreshRunState($codeRun->load('snippet')));
     }
 
     public function run(RunCodeRequest $request, DockerCodeRunner $runner): CodeRunResource
@@ -195,7 +197,7 @@ class CodePlaygroundController extends Controller
             'stdin' => $stdin,
             'status' => 'queued',
             'message' => 'Запуск добавлен в очередь проверки кода.',
-            'started_at' => now(),
+            'started_at' => null,
         ]);
 
         if ($snippet) {
@@ -229,6 +231,65 @@ class CodePlaygroundController extends Controller
         }
 
         abort_unless($request->user() && (int) $snippet->user_id === (int) $request->user()->id, 403);
+    }
+
+    private function refreshRunState(CodeRun $run): CodeRun
+    {
+        if (! in_array($run->status, ['queued', 'running'], true)) {
+            return $run;
+        }
+
+        if ($run->status === 'queued') {
+            $queuedAt = $run->created_at;
+            $staleAfter = (int) config('code_runner.queue_stale_seconds', 120);
+
+            if ($queuedAt && $queuedAt->lt(now()->subSeconds($staleAfter))) {
+                return $this->finishRunAs(
+                    $run,
+                    'failed',
+                    'Запуск не был взят обработчиком очереди. Проверьте, что queue worker слушает очередь code-runs: php artisan queue:work redis --queue=code-runs,default.',
+                    1
+                );
+            }
+        }
+
+        if ($run->status === 'running') {
+            $startedAt = $run->started_at ?? $run->updated_at ?? $run->created_at;
+            $staleAfter = (int) config('code_runner.running_stale_seconds', 240);
+
+            if ($startedAt && $startedAt->lt(now()->subSeconds($staleAfter))) {
+                return $this->finishRunAs(
+                    $run,
+                    'time_limit_error',
+                    'Запуск завис или worker был остановлен во время выполнения. Попробуйте запустить код ещё раз.',
+                    124
+                );
+            }
+        }
+
+        return $run;
+    }
+
+    private function finishRunAs(CodeRun $run, string $status, string $message, int $exitCode): CodeRun
+    {
+        $run->update([
+            'status' => $status,
+            'stderr' => $message,
+            'exit_code' => $exitCode,
+            'message' => $message,
+            'finished_at' => now(),
+        ]);
+
+        $run->loadMissing('snippet');
+
+        if ($run->snippet) {
+            $run->snippet->update([
+                'last_run_status' => $status,
+                'last_run_at' => now(),
+            ]);
+        }
+
+        return $run->fresh('snippet') ?? $run;
     }
 
     private function defaultTitle(string $language): string

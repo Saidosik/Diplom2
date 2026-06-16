@@ -86,6 +86,7 @@ services:
       dockerfile: Dockerfile
       args:
         COMPOSER_INSTALL_ARGS: --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    user: root
     env_file:
       - path: ./backend/.env.production
         required: false
@@ -99,7 +100,8 @@ services:
       REVERB_HOST: reverb
       REVERB_ALLOWED_ORIGINS: ${SITE_URL},https://www.said-diplom.ru
       SESSION_SECURE_COOKIE: "true"
-    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=120
+      DOCKER_HOST: unix:///var/run/docker.sock
+    command: php artisan queue:work redis --queue=code-runs,default --sleep=3 --tries=1 --timeout=210
     depends_on:
       backend:
         condition: service_healthy
@@ -109,6 +111,7 @@ services:
         condition: service_healthy
     volumes:
       - backend-storage:/var/www/html/storage
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
   scheduler:

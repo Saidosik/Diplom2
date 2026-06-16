@@ -20,7 +20,8 @@ class RunPlaygroundCodeJob implements ShouldQueue
     use SerializesModels;
 
     public int $tries = 1;
-    public int $timeout = 180;
+    public int $timeout = 210;
+    public bool $failOnTimeout = true;
 
     public function __construct(public int $codeRunId)
     {
@@ -37,7 +38,7 @@ class RunPlaygroundCodeJob implements ShouldQueue
 
         $run->update([
             'status' => 'running',
-            'started_at' => $run->started_at ?? now(),
+            'started_at' => now(),
             'message' => 'Код выполняется в изолированном Docker sandbox.',
         ]);
 

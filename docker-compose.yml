@@ -58,6 +58,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    user: root
     env_file:
       - ./backend/.env.docker.example
     environment:
@@ -67,7 +68,8 @@ services:
       REDIS_HOST: redis
       REVERB_HOST: reverb
       REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-    command: php artisan queue:work redis --sleep=3 --tries=3 --timeout=120
+      DOCKER_HOST: unix:///var/run/docker.sock
+    command: php artisan queue:work redis --queue=code-runs,default --sleep=3 --tries=1 --timeout=210
     depends_on:
       backend:
         condition: service_healthy
@@ -77,6 +79,7 @@ services:
         condition: service_healthy
     volumes:
       - backend-storage:/var/www/html/storage
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
   scheduler:

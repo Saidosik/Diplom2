@@ -2,11 +2,11 @@
 
 namespace App\Services\CodeRunner;
 
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 
 class DockerCodeRunner
@@ -35,13 +35,8 @@ class DockerCodeRunner
             throw new RuntimeException("Язык {$language} не поддерживается проверяющей системой.");
         }
 
-        $workDir = storage_path('app/code-runner/' . $taskId . '/' . Str::uuid()->toString());
-        File::ensureDirectoryExists($workDir, 0755, true);
-
-        $fileName = $config['file'];
-        $sourcePath = $workDir . DIRECTORY_SEPARATOR . $fileName;
-        File::put($sourcePath, $this->prepareCode($language, $code));
-
+        $fileName = (string) $config['file'];
+        $source = $this->prepareCode($language, $code);
         $stdin = $this->inputToString($input);
         $timeLimitMs = max(
             200,
@@ -53,6 +48,18 @@ class DockerCodeRunner
             $ramLimitMb,
             (int) ($config['min_memory_limit_mb'] ?? 0),
         );
+
+        if ($dockerError = $this->dockerAvailabilityError()) {
+            return new CodeExecutionResult(
+                status: 'runtime_error',
+                stdout: '',
+                stderr: $dockerError,
+                exitCode: 127,
+                executionTime: 0,
+                memoryUsage: 0,
+                message: $dockerError,
+            );
+        }
 
         if (! $this->dockerImageExists((string) $config['image'])) {
             return new CodeExecutionResult(
@@ -89,10 +96,13 @@ class DockerCodeRunner
             '--read-only',
             '--tmpfs',
             '/tmp:rw,nosuid,nodev,size=' . config('code_runner.docker.tmpfs_size', '512m'),
+            '--tmpfs',
+            '/workspace:rw,nosuid,nodev,size=' . config('code_runner.docker.workspace_tmpfs_size', '16m'),
             '--workdir',
             '/workspace',
-            '-v',
-            $workDir . ':/workspace:ro',
+            '-i',
+            '-e',
+            'CODE_RUNNER_SOURCE_B64=' . base64_encode($source),
         ];
 
         foreach (($config['env'] ?? []) as $key => $value) {
@@ -101,25 +111,28 @@ class DockerCodeRunner
         }
 
         $dockerCommand[] = $config['image'];
-        array_push($dockerCommand, ...$config['command']);
+        $dockerCommand[] = 'sh';
+        $dockerCommand[] = '-lc';
+        $dockerCommand[] = $this->bootstrapCommand($fileName, $config['command']);
+
         $startedAt = microtime(true);
 
-        try {
-            $process = new Process($dockerCommand);
-            $process->setInput($stdin);
-            $process->setTimeout(($timeLimitMs / 1000) + 8);
+        $process = new Process($dockerCommand);
+        $process->setInput($stdin);
+        $process->setTimeout(($timeLimitMs / 1000) + 8);
 
+        try {
             try {
                 $process->run();
             } catch (ProcessTimedOutException) {
-                if (isset($process) && $process->isRunning()) {
+                if ($process->isRunning()) {
                     $process->stop(0);
                 }
 
                 return new CodeExecutionResult(
                     status: 'time_limit_error',
-                    stdout: $process->getOutput(),
-                    stderr: $process->getErrorOutput(),
+                    stdout: $this->shortenOutput($process->getOutput()),
+                    stderr: $this->shortenOutput($process->getErrorOutput()),
                     exitCode: 124,
                     executionTime: (int) round((microtime(true) - $startedAt) * 1000),
                     memoryUsage: 0,
@@ -165,19 +178,61 @@ class DockerCodeRunner
                 executionTime: $executionTime,
                 memoryUsage: 0,
             );
-        } finally {
-            File::deleteDirectory($workDir);
+        } catch (Throwable $exception) {
+            return new CodeExecutionResult(
+                status: 'runtime_error',
+                stdout: $process->getOutput(),
+                stderr: $exception->getMessage(),
+                exitCode: 1,
+                executionTime: (int) round((microtime(true) - $startedAt) * 1000),
+                memoryUsage: 0,
+                message: $this->shorten($exception->getMessage()),
+            );
         }
     }
 
+    /**
+     * @param array<int, string> $command
+     */
+    private function bootstrapCommand(string $fileName, array $command): string
+    {
+        $sourcePath = '/workspace/' . ltrim($fileName, '/');
+        $writeSource = 'printf %s "$CODE_RUNNER_SOURCE_B64" | base64 -d > ' . escapeshellarg($sourcePath);
+        $runCommand = 'exec ' . implode(' ', array_map('escapeshellarg', $command));
+
+        return "set -eu\nmkdir -p /workspace\n{$writeSource}\n{$runCommand}";
+    }
+
+    private function dockerAvailabilityError(): ?string
+    {
+        try {
+            $process = new Process(['docker', 'version', '--format', '{{.Server.Version}}']);
+            $process->setTimeout(5);
+            $process->run();
+        } catch (Throwable $exception) {
+            return 'Docker CLI недоступен в queue-контейнере: ' . $exception->getMessage();
+        }
+
+        if ($process->isSuccessful()) {
+            return null;
+        }
+
+        $details = trim($process->getErrorOutput()) ?: trim($process->getOutput());
+
+        return 'Docker daemon недоступен для queue-контейнера. Проверьте volume /var/run/docker.sock и права доступа. ' . $this->shorten($details);
+    }
 
     private function dockerImageExists(string $image): bool
     {
-        $process = new Process(['docker', 'image', 'inspect', $image]);
-        $process->setTimeout(5);
-        $process->run();
+        try {
+            $process = new Process(['docker', 'image', 'inspect', $image]);
+            $process->setTimeout(5);
+            $process->run();
 
-        return $process->isSuccessful();
+            return $process->isSuccessful();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public function normalizeLanguage(string $language): string

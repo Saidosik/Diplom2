@@ -3,6 +3,8 @@
 return [
     'default_time_limit_ms' => (int) env('CODE_RUNNER_TIME_LIMIT_MS', 1500),
     'default_memory_limit_mb' => (int) env('CODE_RUNNER_MEMORY_LIMIT_MB', 128),
+    'queue_stale_seconds' => (int) env('CODE_RUNNER_QUEUE_STALE_SECONDS', 120),
+    'running_stale_seconds' => (int) env('CODE_RUNNER_RUNNING_STALE_SECONDS', 240),
 
     'stop_on_first_failed_test' => (bool) env('CODE_RUNNER_STOP_ON_FIRST_FAILED_TEST', false),
 
@@ -10,6 +12,7 @@ return [
         'cpus' => env('CODE_RUNNER_DOCKER_CPUS', '0.5'),
         'pids_limit' => (int) env('CODE_RUNNER_DOCKER_PIDS_LIMIT', 64),
         'tmpfs_size' => env('CODE_RUNNER_DOCKER_TMPFS_SIZE', '512m'),
+        'workspace_tmpfs_size' => env('CODE_RUNNER_DOCKER_WORKSPACE_TMPFS_SIZE', '16m'),
     ],
 
     'languages' => [
