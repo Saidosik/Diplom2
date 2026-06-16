@@ -1,9 +1,9 @@
 import type React from "react"
 import { BrainCircuit, MessageSquareText, Play } from "lucide-react"
 
-import Aurora from "@/components/animations/Aurora"
 import { BlurText } from "@/components/animations/BlurText"
 import { SiteBrand } from "@/components/layout/site-brand"
+import { BackgroundRenderer } from "@/components/backgrounds/BackgroundRenderer"
 
 const benefits = [
     {
@@ -26,16 +26,7 @@ const benefits = [
 export function AuthShell({ children }: { children: React.ReactNode }) {
     return (
         <main className="dark relative min-h-svh overflow-hidden bg-[#020806] text-foreground">
-            <div className="pointer-events-none absolute inset-x-0 top-[-18%] z-0 h-[72svh] opacity-90 md:h-[88svh]">
-                <Aurora
-                    colorStops={["#19d78c", "#6d5cff", "#b497cf"]}
-                    blend={1}
-                    amplitude={1.12}
-                    speed={1.5}
-                />
-            </div>
-            <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_16%_14%,rgba(25,215,140,0.25),transparent_26%),radial-gradient(circle_at_86%_18%,rgba(109,92,255,0.22),transparent_34%),linear-gradient(to_bottom,rgba(2,8,6,0.08),rgba(2,8,6,0.88)_58%,#020806)]" />
-            <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:64px_64px] opacity-20 [mask-image:radial-gradient(circle_at_center,black,transparent_74%)]" />
+            <BackgroundRenderer scope="auth" className="z-0" />
 
             <div className="relative z-10 mx-auto grid min-h-svh w-full max-w-7xl items-center gap-9 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(340px,420px)] lg:gap-16 lg:px-8 lg:py-12">
                 <section className="mx-auto w-full max-w-2xl text-center lg:mx-0 lg:text-left">

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminAiIndexController;
+use App\Http\Controllers\Api\Admin\AdminAppearanceController;
+use App\Http\Controllers\Api\AppearanceController;
 use App\Http\Controllers\Api\Admin\AdminChatModerationController;
 use App\Http\Controllers\Api\Admin\AdminContentController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
@@ -95,6 +97,7 @@ Route::post('/ai/rag/search', [RagController::class, 'search'])->middleware('thr
 Route::get('/playground/languages', [CodePlaygroundController::class, 'languages']);
 Route::get('/playground/public-snippets/{codeSnippet}', [CodePlaygroundController::class, 'publicSnippet']);
 Route::get('/legal/privacy-policy', [LegalPageController::class, 'privacyPolicy']);
+Route::get('/appearance', AppearanceController::class)->middleware('throttle:60,1');
 
 Route::prefix('oauth')->group(function () {
     Route::get('/{provider}/redirect-url', [SocialAuthController::class, 'redirectUrl']);
@@ -275,6 +278,9 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::prefix('admin')->middleware(['admin', 'throttle:admin-actions'])->group(function () {
         Route::get('/dashboard', AdminDashboardController::class);
+        Route::get('/appearance', [AdminAppearanceController::class, 'show'])->middleware('system_admin');
+        Route::match(['put', 'patch'], '/appearance', [AdminAppearanceController::class, 'update'])->middleware('system_admin');
+        Route::post('/appearance/reset', [AdminAppearanceController::class, 'reset'])->middleware('system_admin');
         Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
         Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
 
