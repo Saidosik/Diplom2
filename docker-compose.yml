@@ -69,7 +69,7 @@ services:
       REVERB_HOST: reverb
       REVERB_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       DOCKER_HOST: unix:///var/run/docker.sock
-    command: php artisan queue:work redis --queue=code-runs,default --sleep=3 --tries=1 --timeout=210
+    command: php artisan queue:work redis --queue=code-runs,ai-index,default --sleep=3 --tries=1 --timeout=960
     depends_on:
       backend:
         condition: service_healthy

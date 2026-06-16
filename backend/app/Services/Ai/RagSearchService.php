@@ -4,6 +4,7 @@ namespace App\Services\Ai;
 
 use App\Models\AiKnowledgeChunk;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -11,6 +12,8 @@ use Illuminate\Support\Str;
 class RagSearchService
 {
     private const TYPES = ['all', 'publication', 'question', 'answer', 'snippet'];
+
+    private ?bool $trigramAvailable = null;
 
     public function __construct(
         private readonly EmbeddingService $embeddings,
@@ -41,9 +44,7 @@ class RagSearchService
             ];
         }
 
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement('SELECT set_limit(0.06)');
-        }
+        $this->configurePostgresSimilarityLimit();
 
         $queryEmbedding = $this->embeddings->embed($query);
         $vectorCandidates = $this->vectorCandidates($queryEmbedding, $type, $limit * 5);
@@ -116,8 +117,10 @@ class RagSearchService
             $parts[] = 'pgvector';
         }
 
-        if (DB::getDriverName() === 'pgsql') {
+        if ($this->canUseTrigram()) {
             $parts[] = 'pg_trgm';
+        } elseif (DB::getDriverName() === 'pgsql') {
+            $parts[] = 'ILIKE';
         }
 
         return implode(' + ', $parts);
@@ -125,9 +128,9 @@ class RagSearchService
 
     /**
      * @param array<int, float> $queryEmbedding
-     * @return \Illuminate\Support\Collection<int, AiKnowledgeChunk>
+     * @return Collection<int, AiKnowledgeChunk>
      */
-    private function vectorCandidates(array $queryEmbedding, string $type, int $limit)
+    private function vectorCandidates(array $queryEmbedding, string $type, int $limit): Collection
     {
         if (! $this->canUsePgvector() || $queryEmbedding === []) {
             return collect();
@@ -159,9 +162,9 @@ class RagSearchService
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, AiKnowledgeChunk>
+     * @return Collection<int, AiKnowledgeChunk>
      */
-    private function lexicalCandidates(string $query, string $type, int $limit)
+    private function lexicalCandidates(string $query, string $type, int $limit): Collection
     {
         $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $query) . '%';
 
@@ -169,37 +172,44 @@ class RagSearchService
             ->with('document')
             ->when($type !== 'all', fn (Builder $builder) => $builder->where('source_type', $type));
 
-        if (DB::getDriverName() === 'pgsql') {
-            $builder
-                ->select('ai_knowledge_chunks.*')
-                ->selectRaw(
-                    "GREATEST(similarity(lower(search_text), lower(?)), similarity(lower(title), lower(?))) AS lexical_score",
-                    [$query, $query]
-                )
-                ->where(function (Builder $q) use ($like, $query) {
-                    $q->where('search_text', 'ILIKE', $like)
-                        ->orWhere('title', 'ILIKE', $like)
-                        ->orWhereRaw('lower(search_text) % lower(?)', [$query])
-                        ->orWhereRaw('lower(title) % lower(?)', [$query]);
-                })
-                ->orderByDesc('lexical_score');
-        } else {
-            $builder->where(function (Builder $q) use ($like) {
-                $q->where('search_text', 'LIKE', $like)
-                    ->orWhere('title', 'LIKE', $like);
-            });
-        }
+        try {
+            if ($this->canUseTrigram()) {
+                return $builder
+                    ->select('ai_knowledge_chunks.*')
+                    ->selectRaw(
+                        "GREATEST(similarity(lower(search_text), lower(?)), similarity(lower(title), lower(?))) AS lexical_score",
+                        [$query, $query]
+                    )
+                    ->where(function (Builder $q) use ($like, $query) {
+                        $q->where('search_text', 'ILIKE', $like)
+                            ->orWhere('title', 'ILIKE', $like)
+                            ->orWhereRaw('lower(search_text) % lower(?)', [$query])
+                            ->orWhereRaw('lower(title) % lower(?)', [$query]);
+                    })
+                    ->orderByDesc('lexical_score')
+                    ->limit($limit)
+                    ->get();
+            }
 
-        return $builder
-            ->latest('indexed_at')
-            ->limit($limit)
-            ->get();
+            return $builder
+                ->where(function (Builder $q) use ($like) {
+                    $operator = DB::getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+
+                    $q->where('search_text', $operator, $like)
+                        ->orWhere('title', $operator, $like);
+                })
+                ->latest('indexed_at')
+                ->limit($limit)
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, AiKnowledgeChunk>
+     * @return Collection<int, AiKnowledgeChunk>
      */
-    private function fallbackCandidates(string $type, int $limit)
+    private function fallbackCandidates(string $type, int $limit): Collection
     {
         return AiKnowledgeChunk::query()
             ->with('document')
@@ -259,10 +269,43 @@ class RagSearchService
         ];
     }
 
+    private function configurePostgresSimilarityLimit(): void
+    {
+        if (! $this->canUseTrigram()) {
+            return;
+        }
+
+        try {
+            DB::statement('SELECT set_limit(0.06)');
+        } catch (\Throwable) {
+            $this->trigramAvailable = false;
+        }
+    }
+
     private function canUsePgvector(): bool
     {
         return DB::getDriverName() === 'pgsql'
             && (string) config('ai.vector.driver', 'json') === 'pgvector'
             && Schema::hasColumn('ai_knowledge_chunks', (string) config('ai.vector.column', 'embedding_vector'));
+    }
+
+    private function canUseTrigram(): bool
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return false;
+        }
+
+        if ($this->trigramAvailable !== null) {
+            return $this->trigramAvailable;
+        }
+
+        try {
+            $exists = DB::table('pg_extension')->where('extname', 'pg_trgm')->exists();
+            $this->trigramAvailable = (bool) $exists;
+        } catch (\Throwable) {
+            $this->trigramAvailable = false;
+        }
+
+        return $this->trigramAvailable;
     }
 }

@@ -83,8 +83,12 @@ async function proxyLaravelStream(request: NextRequest, endpoint: string) {
         status: response.status,
         headers: {
             "Content-Type": response.headers.get("content-type") ?? "text/event-stream; charset=utf-8",
-            "Cache-Control": "no-cache, no-transform",
+            "Cache-Control": "private, no-store, max-age=0, no-transform, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Vary": "Cookie, Authorization",
             "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
         },
     })
 }
@@ -159,7 +163,17 @@ async function proxyLaravel(request: NextRequest, context: RouteContext) {
 }
 
 function shouldNoStore(request: NextRequest, pathname: string) {
-    return request.method === "GET" && NO_STORE_GET_ENDPOINTS.has(pathname)
+    return isAiEndpoint(pathname)
+        || request.method !== "GET"
+        || NO_STORE_GET_ENDPOINTS.has(pathname)
+}
+
+function isAiEndpoint(pathname: string) {
+    return pathname === "ai/capabilities"
+        || pathname === "ai/search"
+        || pathname.startsWith("ai/chat")
+        || pathname.startsWith("ai/rag")
+        || pathname.startsWith("ai/code")
 }
 
 function shouldRetryPersonalizedAsPublic(request: NextRequest, pathname: string, token: string | null, status: number) {
