@@ -37,7 +37,13 @@ export async function getMyPublications(params?: Record<string, string | number 
 
 
 export async function getPopularPublications(params?: { period?: PopularPublicationPeriod; limit?: number; page?: number; sort?: string; type?: string }) {
-    const response = await browserApi.get<unknown>("/publications/popular", { params })
+    const response = await browserApi.get<unknown>("/publications/popular", {
+        params: { ...params, _r: Date.now() },
+        headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+        },
+    })
     return normalizePublicationsResponse(response.data, params?.period ?? "week")
 }
 

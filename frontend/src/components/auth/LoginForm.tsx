@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { login } from "@/features/auth/api"
 import { loginSchema } from "@/features/auth/schemas"
+import { notifySessionChanged } from "@/lib/auth/session-events"
 import { safeRequest } from "@/lib/http/api-errors"
 
 export function LoginForm() {
@@ -64,6 +65,8 @@ export function LoginForm() {
                 }
 
                 toast.success("Успешный вход")
+                notifySessionChanged()
+                router.refresh()
                 router.push("/profile")
                 router.refresh()
             } catch (errorResponse) {

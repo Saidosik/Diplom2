@@ -10,15 +10,22 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getRecommendations, trackRecommendationEvent } from "@/features/community/api"
+import { useSessionRefreshKey } from "@/lib/auth/use-session-refresh-key"
 import type { CommunityRecommendation, RecommendationEventPayload } from "@/features/community/types"
 
 export function RecommendationsBlock() {
     const viewedKeysRef = useRef(new Set<string>())
     const [hiddenKeys, setHiddenKeys] = useState<string[]>([])
+    const sessionRefreshKey = useSessionRefreshKey()
     const recommendationsQuery = useQuery({
-        queryKey: ["recommendations", "home", "week"],
+        queryKey: ["recommendations", "home", "week", sessionRefreshKey],
         queryFn: () => getRecommendations("week"),
     })
+
+    useEffect(() => {
+        viewedKeysRef.current.clear()
+        setHiddenKeys([])
+    }, [sessionRefreshKey])
 
     const mode = recommendationsQuery.data?.mode ?? "guest"
     const strategy = recommendationsQuery.data?.meta?.strategy ?? "guest_trending"

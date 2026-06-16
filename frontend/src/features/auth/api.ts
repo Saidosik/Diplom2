@@ -17,7 +17,13 @@ export async function register(payload: RegisterDto): Promise<AuthActionResponse
 }
 
 export async function getMe(): Promise<User> {
-  const response = await browserApi.get<AuthMeResponse>('/auth/me');
+  const response = await browserApi.get<AuthMeResponse>('/auth/me', {
+    params: { _r: Date.now() },
+    headers: {
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+  });
   return response.data.user;
 }
 

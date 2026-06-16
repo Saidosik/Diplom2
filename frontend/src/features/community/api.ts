@@ -15,8 +15,13 @@ import type {
     InterestProfile,
 } from "@/features/community/types"
 
+const noCacheHeaders = {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+}
+
 export async function getCommunityDiscovery(period: "day" | "week" | "month" = "week") {
-    const response = await browserApi.get<CommunityDiscovery>("/laravel/community/discovery", { params: { period } })
+    const response = await browserApi.get<CommunityDiscovery>("/laravel/community/discovery", { params: { period, _r: Date.now() }, headers: noCacheHeaders })
     return response.data
 }
 
@@ -31,12 +36,12 @@ export async function getCommunityTrends(period: "day" | "week" | "month" = "wee
 }
 
 export async function getCommunityRecommendations(period: "day" | "week" | "month" = "week") {
-    const response = await browserApi.get<{ period: string; data: CommunityRecommendation[] }>("/laravel/community/recommendations", { params: { period } })
+    const response = await browserApi.get<{ period: string; data: CommunityRecommendation[] }>("/laravel/community/recommendations", { params: { period, _r: Date.now() }, headers: noCacheHeaders })
     return response.data
 }
 
 export async function getRecommendations(period: "day" | "week" | "month" = "week") {
-    const response = await browserApi.get<RecommendationsResponse>("/laravel/recommendations", { params: { period } })
+    const response = await browserApi.get<RecommendationsResponse>("/laravel/recommendations", { params: { period, _r: Date.now() }, headers: noCacheHeaders })
     return response.data
 }
 
