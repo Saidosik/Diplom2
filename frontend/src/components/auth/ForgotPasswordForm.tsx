@@ -1,39 +1,31 @@
 "use client"
+
 import * as React from "react"
 import Link from "next/link"
 import { useForm } from "@tanstack/react-form"
+import { KeyRound, LoaderCircle, MailCheck } from "lucide-react"
 
+import { AuthCard } from "@/components/auth/AuthCard"
+import AuthSocialButtons from "@/components/auth/AuthSocialButtons"
 import { Button } from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
-import {
-    Field,
-    FieldError,
-} from "@/components/ui/field"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { forgotPasswordSchema } from "@/features/auth/schemas"
-import AuthSocialButtons from "./AuthSocialButtons"
-import { LoaderCircle } from "lucide-react"
 import { safeRequest } from "@/lib/http/api-errors"
 import { browserApi } from "@/lib/http/browser"
 
 export async function sendForgotPasswordEmail(emailReq: string) {
-    const response = await browserApi.post('/auth/forgot-password', {
-        email: emailReq
+    const response = await browserApi.post("/auth/forgot-password", {
+        email: emailReq,
     })
     return response.data
 }
 
 export function ForgotPasswordForm() {
     const [error, setError] = React.useState("")
-    const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [success, setSuccess] = React.useState("")
+    const [isSubmitting, setIsSubmitting] = React.useState(false)
+
     const form = useForm({
         defaultValues: {
             email: "",
@@ -47,21 +39,14 @@ export function ForgotPasswordForm() {
 
             try {
                 setIsSubmitting(true)
-
                 const result = await safeRequest(sendForgotPasswordEmail(value.email))
 
                 if (!result.success) {
-                    setError(
-                        result.error?.message ??
-                        "Не удалось отправить письмо для восстановления пароля"
-                    )
+                    setError(result.error?.message ?? "Не удалось отправить письмо для восстановления пароля")
                     return
                 }
 
-                setSuccess(
-                    result.data?.message ??
-                    "Ссылка для смены пароля отправлена вам на почту"
-                )
+                setSuccess(result.data?.message ?? "Ссылка для смены пароля отправлена вам на почту")
             } catch (errorResponse) {
                 console.log("[FORGOT_PASSWORD_ERROR]", errorResponse)
                 setError("Произошла неизвестная ошибка")
@@ -72,95 +57,90 @@ export function ForgotPasswordForm() {
     })
 
     React.useEffect(() => {
-        // Получаем элементы формы
-        const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+        const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement | null
 
-        // Если в DOM есть значения, которых нет в стейте формы, обновляем их
         if (emailInput?.value && form.state.values.email === "") {
-            form.setFieldValue('email', emailInput.value);
+            form.setFieldValue("email", emailInput.value)
         }
-    }, [form]);
+    }, [form])
 
     return (
-
-
         <>
-        <Card className="w-full rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45 [&_input]:border-white/10 [&_input]:bg-[#0c1711] [&_input]:text-white [&_input]:placeholder:text-slate-500 [&_input]:focus-visible:border-primary [&_input]:focus-visible:ring-primary/30">
-            <CardHeader>
-                <CardTitle><h1>Восстановление пароля</h1></CardTitle>
-                <CardDescription className="w-100 text-slate-400">Укажите email аккаунта — отправим ссылку для сброса пароля.</CardDescription>
-            </CardHeader>
-            <CardContent>
+            <AuthCard
+                eyebrow="Сброс доступа"
+                title="Восстановление пароля"
+                icon={success ? <MailCheck className="size-5" /> : <KeyRound className="size-5" />}
+                description="Укажите email аккаунта — отправим ссылку для безопасной смены пароля."
+                footer={
+                    <>
+                        <Button
+                            type="submit"
+                            disabled={isSubmitting || Boolean(success)}
+                            form="ForgotPasswordForm"
+                            className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                        >
+                            {isSubmitting ? "Отправляем" : success ? "Письмо отправлено" : "Отправить ссылку"}
+                            {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
+                        </Button>
+
+                        {error && (
+                            <div className="border border-destructive/20 bg-destructive/10 p-3 text-center text-sm text-destructive">
+                                {error}
+                            </div>
+                        )}
+
+                        {success && (
+                            <div className="border border-emerald-400/20 bg-emerald-500/10 p-3 text-center text-sm text-emerald-300">
+                                {success}
+                            </div>
+                        )}
+
+                        <AuthSocialButtons providers={["google", "yandex", "github"]} label="Войти быстрее" />
+                    </>
+                }
+            >
                 <form
                     id="ForgotPasswordForm"
-                    onSubmit={async (e) => {
-                        e.preventDefault()
+                    className="space-y-5"
+                    onSubmit={async (event) => {
+                        event.preventDefault()
                         await form.handleSubmit()
                     }}
                 >
+                    <FieldGroup className="gap-4">
+                        <form.Field name="email">
+                            {(field) => {
+                                const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
 
-
-                    <form.Field
-                        name="email">
-                        {(field) => {
-                            const isInvalid =
-                                field.state.meta.isTouched && !field.state.meta.isValid
-                            return (
-                                <Field data-invalid={isInvalid}>
-                                    <Input
-                                        id={field.name}
-                                        name={field.name}
-                                        value={field.state.value}
-                                        onBlur={field.handleBlur}
-                                        onChange={(e) => field.handleChange(e.target.value)}
-                                        aria-invalid={isInvalid}
-                                        placeholder="почта@yandex.ru"
-                                        autoComplete="on"
-                                    />
-                                    {isInvalid && <FieldError errors={field.state.meta.errors} />}
-                                </Field>
-                            )
-                        }}
-
-                    </form.Field>
+                                return (
+                                    <Field data-invalid={isInvalid}>
+                                        <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                                        <Input
+                                            id={field.name}
+                                            name={field.name}
+                                            type="email"
+                                            value={field.state.value}
+                                            onBlur={field.handleBlur}
+                                            onChange={(event) => field.handleChange(event.target.value)}
+                                            aria-invalid={isInvalid}
+                                            placeholder="you@example.com"
+                                            autoComplete="email"
+                                        />
+                                        {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                                    </Field>
+                                )
+                            }}
+                        </form.Field>
+                    </FieldGroup>
                 </form>
-            </CardContent>
-            <CardFooter>
+            </AuthCard>
 
-                <Field orientation="vertical">
-                    <Button type="submit" disabled={isSubmitting} form="ForgotPasswordForm" className="w-full">
-                        {
-                            isSubmitting ? "Отправляем" : "Отправить ссылку"
-                        }
-                        {
-                            isSubmitting ? <LoaderCircle className="animate-spin" /> : ''
-                        }
-                    </Button>
-                    {error && (
-                        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm text-center">
-                            {error}
-                        </div>
-                    )}
-                    {success && (
-                        <div className="mb-4 rounded-md bg-emerald-500/10 p-3 text-center text-sm text-emerald-600 dark:text-emerald-400 ">
-                            {success}
-                        </div>
-                    )}
-
-                    <p className="text-center text-sm text-muted-foreground">
-                        Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
-                    </p>
-
-                    <AuthSocialButtons providers={['google', 'yandex', 'github']} />
-                </Field>
-
-            </CardFooter>
-
-        </Card>
-        <p className="mt-4 text-center text-sm text-slate-400">
-            Вспомнили пароль? <Link href="/auth?mode=login" className="text-primary">Войти</Link>
-        </p>
+            <p className="mt-5 text-center text-sm text-slate-400">
+                Вспомнили пароль?{" "}
+                <Link href="/auth?mode=login" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Войти
+                </Link>
+            </p>
         </>
-
     )
 }

@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
+import { BarChart3, Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
 import type { User } from "@/features/auth/types"
 import { SiteBrand } from "@/components/layout/site-brand"
+import { AppAmbient } from "@/components/layout/app-ambient"
 import { SidebarUser } from "@/components/layout/sidebar-user"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -35,7 +36,9 @@ const mainItems = [
     { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
     { title: "AI индекс", href: "/admin/ai", icon: Database },
+    { title: "Рекомендации", href: "/admin/recommendations", icon: BarChart3 },
     { title: "Правовые документы", href: "/admin/legal/privacy-policy", icon: ScrollText, adminOnly: true },
+    { title: "Внешний вид", href: "/admin/appearance", icon: Palette, adminOnly: true },
 ]
 
 const systemItems = [
@@ -161,19 +164,24 @@ export function AdminShell({ user, children }: AdminShellProps) {
         <SidebarProvider>
             <AdminSidebar user={user} canManageSystem={canManageSystem} />
             <SidebarInset className="min-w-0 flex-1">
-                    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:px-6">
-                        <SidebarTrigger className="size-9" />
-                        <Separator orientation="vertical" className="hidden h-5 sm:block" />
-                        <SiteBrand href="/admin" size="sm" nameClassName="hidden text-sm sm:inline" />
-                        <div className="ml-auto flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-                            <span className="hidden max-w-48 truncate md:inline">{user.name}</span>
-                            <Badge variant={canManageSystem ? "default" : "secondary"} className="shrink-0">{roleLabel(user)}</Badge>
-                        </div>
-                    </header>
+                <div className="relative min-h-dvh overflow-hidden bg-background">
+                    <AppAmbient scope="admin" />
+                    <div className="relative z-10 flex min-h-dvh flex-col">
+                        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/90 px-3 backdrop-blur sm:px-4 md:px-6">
+                            <SidebarTrigger className="size-9" />
+                            <Separator orientation="vertical" className="hidden h-5 sm:block" />
+                            <SiteBrand href="/admin" size="sm" nameClassName="hidden text-sm sm:inline" />
+                            <div className="ml-auto flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                                <span className="hidden max-w-48 truncate md:inline">{user.name}</span>
+                                <Badge variant={canManageSystem ? "default" : "secondary"} className="shrink-0">{roleLabel(user)}</Badge>
+                            </div>
+                        </header>
 
-                    <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-5 sm:px-4 md:px-6 md:py-6 xl:px-8">
-                        {children}
-                    </main>
+                        <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-5 sm:px-4 md:px-6 md:py-6 xl:px-8">
+                            {children}
+                        </main>
+                    </div>
+                </div>
             </SidebarInset>
         </SidebarProvider>
     )
