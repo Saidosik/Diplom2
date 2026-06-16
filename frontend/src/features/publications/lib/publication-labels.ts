@@ -44,11 +44,17 @@ export function formatPublicationDate(value?: string | null) {
         return "Дата не указана"
     }
 
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return "Дата не указана"
+    }
+
     return new Intl.DateTimeFormat("ru-RU", {
         day: "numeric",
         month: "long",
         year: "numeric",
-    }).format(new Date(value))
+    }).format(date)
 }
 
 export function getPublicationTypeLabel(type: PublicationType, fallback?: string) {

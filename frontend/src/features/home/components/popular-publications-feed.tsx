@@ -30,7 +30,7 @@ import { getPopularPublications } from "@/features/publications/api"
 import { formatPublicationDate, getPublicationTypeLabel } from "@/features/publications/lib/publication-labels"
 import { TagBadge } from "@/features/tags/components/tag-badge"
 import { UserAvatar } from "@/features/users/components/user-avatar"
-import type { PopularPublicationPeriod, Publication, PublicationType } from "@/features/publications/types"
+import type { PopularPublicationPeriod, Publication, PublicationTag, PublicationType } from "@/features/publications/types"
 
 const periods: Array<{ value: PopularPublicationPeriod; label: string }> = [
     { value: "day", label: "День" },
@@ -48,12 +48,12 @@ const sortOptions = [
 ] as const
 
 type SortMode = (typeof sortOptions)[number]["value"]
-
 type FeedStatus = "idle" | "loading" | "loading-more" | "error"
 
 const INITIAL_LIMIT = 10
 const LOAD_MORE_LIMIT = 8
-const availableTypes = ["article", "guide", "tutorial", "news", "post", "opinion"] as PublicationType[]
+const availableTypes = ["article", "guide", "tutorial", "news", "post", "opinion", "release", "question_related"] as PublicationType[]
+const FALLBACK_PUBLICATION_TYPE = "post" as PublicationType
 
 export function PopularPublicationsFeed() {
     const [period, setPeriod] = useState<PopularPublicationPeriod>("week")
@@ -87,7 +87,9 @@ export function PopularPublicationsFeed() {
                     type: typeFilter,
                 })
 
-                const nextPublications = Array.isArray(response.data) ? response.data : []
+                const nextPublications = Array.isArray(response.data)
+                    ? response.data.filter(isRenderablePublication)
+                    : []
 
                 setPublications((current) =>
                     mode === "replace" ? nextPublications : mergePublications(current, nextPublications)
@@ -112,25 +114,30 @@ export function PopularPublicationsFeed() {
         []
     )
 
+    const safePublications = useMemo(
+        () => publications.filter(isRenderablePublication),
+        [publications]
+    )
+
     const filteredPublications = useMemo(() => {
         const normalizedQuery = query.trim().toLowerCase()
 
         if (!normalizedQuery) {
-            return publications
+            return safePublications
         }
 
-        return publications.filter((publication) => {
-            const tags = (publication.tags ?? []).map((tag) => tag.name)
-            const searchSurface = [publication.title, publication.excerpt, publication.author?.name, ...tags]
+        return safePublications.filter((publication) => {
+            const tags = safeTags(publication).map((tag) => tag.name)
+            const searchSurface = [safeText(publication.title), safeText(publication.excerpt), safeText(publication.author?.name), ...tags]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase()
 
             return searchSurface.includes(normalizedQuery)
         })
-    }, [publications, query])
+    }, [safePublications, query])
 
-    const isInitialLoading = status === "loading" && publications.length === 0
+    const isInitialLoading = status === "loading" && safePublications.length === 0
     const isLoadingMore = status === "loading-more"
 
     return (
@@ -151,21 +158,21 @@ export function PopularPublicationsFeed() {
                 <div className="min-w-0 space-y-3">
                     {isInitialLoading ? (
                         <PublicationListSkeleton />
-                    ) : status === "error" && publications.length === 0 ? (
+                    ) : status === "error" && safePublications.length === 0 ? (
                         <ErrorState message={error ?? "Неизвестная ошибка"} onRetry={() => loadPublications(1, "replace")} />
-                    ) : publications.length === 0 ? (
+                    ) : safePublications.length === 0 ? (
                         <EmptyState title="Пока нет публикаций" description="Для выбранного периода не найдено материалов." />
                     ) : filteredPublications.length === 0 ? (
                         <EmptyState title="Ничего не найдено" description="Попробуйте изменить поиск, тип материала или сортировку." />
                     ) : (
                         <div className="space-y-3">
                             {filteredPublications.map((publication, index) => (
-                                <PublicationCard key={publication.id} publication={publication} index={index} />
+                                <PublicationCard key={publicationKey(publication, index)} publication={publication} index={index} />
                             ))}
                         </div>
                     )}
 
-                    {!isInitialLoading && publications.length > 0 && filteredPublications.length > 0 ? (
+                    {!isInitialLoading && safePublications.length > 0 && filteredPublications.length > 0 ? (
                         <div className="flex flex-col items-center gap-3 pt-3">
                             {status === "error" && error ? <p className="text-sm text-destructive">{error}</p> : null}
                             {hasMore && nextPage ? (
@@ -193,7 +200,7 @@ export function PopularPublicationsFeed() {
                     ) : null}
                 </div>
 
-                {publications.length > 0 ? <FeedAside publications={publications} /> : null}
+                {safePublications.length > 0 ? <FeedAside publications={safePublications} /> : null}
             </div>
         </section>
     )
@@ -319,6 +326,10 @@ function FeedToolbar({
 
 function PublicationCard({ publication, index }: { publication: Publication; index: number }) {
     const rating = getPublicationRating(publication)
+    const slug = safeSlug(publication)
+    const href = slug ? `/publications/${slug}` : "#"
+    const title = safeText(publication.title) || "Без названия"
+    const excerpt = safeText(publication.excerpt)
 
     return (
         <article className="group rounded-none border bg-card/70 transition-colors hover:border-primary/45 hover:bg-card/90">
@@ -332,15 +343,15 @@ function PublicationCard({ publication, index }: { publication: Publication; ind
                 <div className="p-4 md:p-5">
                     <PublicationAuthor publication={publication} />
 
-                    <Link href={`/publications/${publication.slug}`} className="mt-3 block focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                    <Link href={href} className="mt-3 block focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
                         <h2 className="line-clamp-2 text-xl font-semibold tracking-tight transition-colors group-hover:text-primary md:text-2xl">
-                            {publication.title}
+                            {title}
                         </h2>
                     </Link>
 
-                    {publication.excerpt ? (
+                    {excerpt ? (
                         <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground md:text-[15px]">
-                            {publication.excerpt}
+                            {excerpt}
                         </p>
                     ) : null}
 
@@ -358,10 +369,10 @@ function PublicationTags({ publication }: { publication: Publication }) {
     return (
         <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className="rounded-none border-primary/30 bg-primary/5 text-primary">
-                {getPublicationTypeLabel(publication.type, publication.content_type_label || publication.type_label)}
+                {getPublicationTypeLabel(safePublicationType(publication.type), safeText(publication.content_type_label || publication.type_label || publication.type) || "Публикация")}
             </Badge>
-            {(publication.tags ?? []).slice(0, 4).map((tag) => (
-                <TagBadge key={tag.id || tag.slug} tag={tag} compact />
+            {safeTags(publication).slice(0, 4).map((tag) => (
+                <TagBadge key={tag.slug} tag={tag} compact />
             ))}
         </div>
     )
@@ -373,14 +384,14 @@ function PublicationAuthor({ publication }: { publication: Publication }) {
     return (
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
             <UserAvatar
-                user={{ name: author?.name || "Автор", avatar: author?.avatar || null, avatar_url: author?.avatar_url || null }}
+                user={{ name: safeText(author?.name) || "Автор", avatar: author?.avatar || null, avatar_url: author?.avatar_url || null }}
                 className="size-8"
                 size="sm"
             />
             <span className="min-w-0 truncate">
-                <span className="font-medium text-foreground">{author?.name || "Автор"}</span>
+                <span className="font-medium text-foreground">{safeText(author?.name) || "Автор"}</span>
                 <span> · {formatPublicationDate(publication.published_at || publication.created_at)}</span>
-                <span> · {publication.reading_time_minutes || publication.reading_time || 1} мин</span>
+                <span> · {positiveNumber(publication.reading_time_minutes || publication.reading_time, 1)} мин</span>
             </span>
         </div>
     )
@@ -389,10 +400,10 @@ function PublicationAuthor({ publication }: { publication: Publication }) {
 function PublicationMetrics({ publication }: { publication: Publication }) {
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-muted-foreground">
-            <Metric icon={Eye}>{formatCompact(publication.views_count || 0)}</Metric>
-            <Metric icon={MessageSquare}>{publication.comments_count || 0}</Metric>
-            <Metric icon={Bookmark}>{publication.saved_count || 0}</Metric>
-            <Metric icon={Clock3}>{publication.reading_time_minutes || publication.reading_time || 1} мин</Metric>
+            <Metric icon={Eye}>{formatCompact(publication.views_count)}</Metric>
+            <Metric icon={MessageSquare}>{positiveNumber(publication.comments_count)}</Metric>
+            <Metric icon={Bookmark}>{positiveNumber(publication.saved_count)}</Metric>
+            <Metric icon={Clock3}>{positiveNumber(publication.reading_time_minutes || publication.reading_time, 1)} мин</Metric>
         </div>
     )
 }
@@ -432,18 +443,22 @@ function FeedAside({ publications }: { publications: Publication[] }) {
                 </AsideSection>
 
                 <AsideSection title="Обсуждают" icon={Flame}>
-                    {active.map((publication) => (
-                        <Link
-                            key={publication.id}
-                            href={`/publications/${publication.slug}`}
-                            className="block rounded-none px-2 py-2 text-sm transition-colors hover:bg-muted/50 hover:text-primary"
-                        >
-                            <span className="line-clamp-2">{publication.title}</span>
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                                {publication.comments_count || 0} комментариев · {formatCompact(publication.views_count || 0)} просмотров
-                            </span>
-                        </Link>
-                    ))}
+                    {active.map((publication, index) => {
+                        const slug = safeSlug(publication)
+
+                        return (
+                            <Link
+                                key={publicationKey(publication, index)}
+                                href={slug ? `/publications/${slug}` : "#"}
+                                className="block rounded-none px-2 py-2 text-sm transition-colors hover:bg-muted/50 hover:text-primary"
+                            >
+                                <span className="line-clamp-2">{safeText(publication.title) || "Без названия"}</span>
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                    {positiveNumber(publication.comments_count)} комментариев · {formatCompact(publication.views_count)} просмотров
+                                </span>
+                            </Link>
+                        )
+                    })}
                 </AsideSection>
 
                 <AsideSection title="Авторы" icon={Users}>
@@ -531,31 +546,31 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 }
 
 function mergePublications(current: Publication[], next: Publication[]) {
-    const seen = new Set(current.map((publication) => publication.id))
-    return [...current, ...next.filter((publication) => !seen.has(publication.id))]
+    const seen = new Set(current.map((publication, index) => publicationKey(publication, index)))
+    return [...current, ...next.filter((publication, index) => !seen.has(publicationKey(publication, index)))]
 }
 
 function activityScore(publication: Publication) {
-    return (
-        publication.score ||
-        (publication.likes_count || 0) * 3 +
-            (publication.comments_count || 0) * 4 +
-            (publication.saved_count || 0) * 2 +
-            (publication.views_count || 0) * 0.2
-    )
+    const explicitScore = positiveNumber(publication.score, NaN)
+
+    return Number.isFinite(explicitScore)
+        ? explicitScore
+        : positiveNumber(publication.likes_count) * 3 + positiveNumber(publication.comments_count) * 4 + positiveNumber(publication.saved_count) * 2 + positiveNumber(publication.views_count) * 0.2
 }
 
 function getPublicationRating(publication: Publication) {
-    return publication.rating ?? (publication.likes_count || 0) - (publication.dislikes_count || 0)
+    const rating = positiveNumber(publication.rating, NaN)
+
+    return Number.isFinite(rating) ? rating : positiveNumber(publication.likes_count) - positiveNumber(publication.dislikes_count)
 }
 
 function getTrendingTags(publications: Publication[]) {
     const map = new Map<string, { name: string; slug: string; count: number }>()
 
     publications
-        .flatMap((publication) => publication.tags ?? [])
+        .flatMap((publication) => safeTags(publication))
         .forEach((tag) => {
-            const current = map.get(tag.slug) || { name: tag.name, slug: tag.slug, count: 0 }
+            const current = map.get(tag.slug) || { name: tag.name || tag.slug, slug: tag.slug, count: 0 }
             current.count += 1
             map.set(tag.slug, current)
         })
@@ -570,17 +585,18 @@ function getActiveAuthors(publications: Publication[]) {
 
     publications.forEach((publication) => {
         const author = publication.author
-        if (!author?.id) return
+        const authorId = Number(author?.id)
+        if (!Number.isFinite(authorId)) return
 
-        const current = map.get(author.id) || {
-            id: author.id,
-            name: author.name || "Автор",
-            avatar: author.avatar,
-            avatar_url: author.avatar_url,
+        const current = map.get(authorId) || {
+            id: authorId,
+            name: safeText(author?.name) || "Автор",
+            avatar: author?.avatar,
+            avatar_url: author?.avatar_url,
             count: 0,
         }
         current.count += 1
-        map.set(author.id, current)
+        map.set(authorId, current)
     })
 
     return Array.from(map.values())
@@ -589,9 +605,57 @@ function getActiveAuthors(publications: Publication[]) {
 }
 
 function formatSigned(value: number) {
-    return value > 0 ? `+${value}` : String(value)
+    const safeValue = Number.isFinite(value) ? value : 0
+
+    return safeValue > 0 ? `+${safeValue}` : String(safeValue)
 }
 
-function formatCompact(value: number) {
-    return new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 }).format(value)
+function formatCompact(value?: number | string | null) {
+    return new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 }).format(positiveNumber(value))
+}
+
+function isRenderablePublication(publication: Publication | null | undefined): publication is Publication {
+    return Boolean(publication && typeof publication === "object" && (safeSlug(publication) || safeText(publication.title)))
+}
+
+function publicationKey(publication: Publication, index: number) {
+    const id = publication.id ? String(publication.id) : ""
+    const slug = safeSlug(publication)
+
+    return id || slug || `${safeText(publication.title) || "publication"}-${index}`
+}
+
+function safeSlug(publication: Publication) {
+    return typeof publication.slug === "string" && publication.slug.trim() ? publication.slug.trim() : ""
+}
+
+function safeText(value: unknown) {
+    return typeof value === "string" ? value : ""
+}
+
+function positiveNumber(value?: number | string | null, fallback = 0) {
+    const number = Number(value)
+
+    if (!Number.isFinite(number) || number < 0) {
+        return fallback
+    }
+
+    return number
+}
+
+function safePublicationType(value: unknown): PublicationType {
+    return availableTypes.includes(value as PublicationType) ? value as PublicationType : FALLBACK_PUBLICATION_TYPE
+}
+
+function safeTags(publication: Publication): PublicationTag[] {
+    return Array.isArray(publication.tags)
+        ? publication.tags
+            .filter((tag): tag is PublicationTag => Boolean(tag && typeof tag === "object" && typeof tag.slug === "string" && tag.slug.trim()))
+            .map((tag, index) => ({
+                ...tag,
+                id: Number.isFinite(Number(tag.id)) ? Number(tag.id) : index,
+                name: safeText(tag.name) || tag.slug,
+                slug: tag.slug.trim(),
+            }))
+        : []
 }
