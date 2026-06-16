@@ -25,6 +25,7 @@ import { acceptIssueAnswer, deleteIssueAnswer } from "@/features/issues/api"
 import { formatIssueDate } from "@/features/issues/lib/issue-labels"
 import type { IssueAnswer, IssueQuestion } from "@/features/issues/types"
 import { getEcho } from "@/lib/realtime/echo"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 type IssueQuestionDetailPageProps = {
     question: IssueQuestion
@@ -131,7 +132,7 @@ export function IssueQuestionDetailPage({ question, isAuthenticated = false }: I
                         <span className="inline-flex items-center gap-1.5">
                             <UserRound className="size-4" />
                             {question.author?.id ? (
-                                <Link href={`/users/${question.author.id}`} className="hover:text-primary hover:underline">
+                                <Link href={getUserProfileHrefOrFallback(question.author)} className="hover:text-primary hover:underline">
                                     {question.author.name || "Автор"}
                                 </Link>
                             ) : (

@@ -13,6 +13,7 @@ export type SocialAccount = {
 export type User = {
   id: number
   name: string
+  username?: string | null
   email: string
   role?: "user" | "admin" | "moderator" | string
   reputation_score?: number
@@ -59,6 +60,7 @@ export type LoginDto = {
 
 export type RegisterDto = {
   name: string
+  username?: string | null
   email: string
   password: string
   password_confirmation: string

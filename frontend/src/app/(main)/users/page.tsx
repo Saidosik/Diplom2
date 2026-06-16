@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import type { CommunityDiscovery, CommunityOverview, CommunityTopUser } from "@/features/community/types"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -178,7 +179,7 @@ function UserCard({ user, index }: { user: CommunityTopUser; index: number }) {
                 </div>
 
                 <Button asChild variant="outline" className="w-full">
-                    <Link href={`/users/${user.id}`}>
+                    <Link href={getUserProfileHrefOrFallback(user)}>
                         Открыть профиль
                         <ArrowRight className="size-4" />
                     </Link>

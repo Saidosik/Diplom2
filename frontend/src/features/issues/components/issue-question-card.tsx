@@ -10,6 +10,7 @@ import { UserAvatar } from "@/features/users/components/user-avatar"
 import { formatIssueDate, getIssueStatusLabel } from "@/features/issues/lib/issue-labels"
 import { getQuestionPopularityScore } from "@/features/issues/lib/issue-workflow"
 import type { IssueQuestion } from "@/features/issues/types"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 type IssueQuestionCardProps = {
     question: IssueQuestion
@@ -62,7 +63,7 @@ export function IssueQuestionCard({ question, manage = false }: IssueQuestionCar
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                         {question.author?.id ? (
-                            <Link href={`/users/${question.author.id}`} className="inline-flex items-center gap-1.5 hover:text-primary hover:underline">
+                            <Link href={getUserProfileHrefOrFallback(question.author)} className="inline-flex items-center gap-1.5 hover:text-primary hover:underline">
                                 <UserAvatar user={question.author} className="size-6" size="sm" />
                                 {question.author.name || "Автор"}
                             </Link>

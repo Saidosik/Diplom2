@@ -34,6 +34,7 @@ export type PublicationTag = {
 export type PublicationAuthor = {
     id: number
     name: string
+    username?: string | null
     role?: string | null
     reputation_score?: number
     reputation_level?: { label: string; next_label?: string | null; progress: number } | null

@@ -8,6 +8,7 @@ import { TagBadge } from "@/features/tags/components/tag-badge"
 import { UserAvatar } from "@/features/users/components/user-avatar"
 import type { Publication } from "@/features/publications/types"
 import { formatPublicationDate, getPublicationTypeLabel } from "@/features/publications/lib/publication-labels"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 type PublicationCardProps = {
     publication: Publication
@@ -71,7 +72,7 @@ export function PublicationCard({ publication, manage = false }: PublicationCard
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                         {publication.author?.id ? (
-                            <Link href={`/users/${publication.author.id}`} className="inline-flex items-center gap-1.5 hover:text-primary hover:underline">
+                            <Link href={getUserProfileHrefOrFallback(publication.author)} className="inline-flex items-center gap-1.5 hover:text-primary hover:underline">
                                 <UserAvatar user={publication.author} className="size-6" size="sm" />
                                 {publication.author.name || "Автор"}
                             </Link>

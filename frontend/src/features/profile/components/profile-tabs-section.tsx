@@ -62,6 +62,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { getUserProfileHrefOrFallback } from "@/features/users/lib/user-links"
 
 type ProfileTabsSectionProps = {
     user: User
@@ -706,7 +707,7 @@ function PeopleSection({ items, isOwner, loading }: { items: ProfileHubItem[]; i
                 {loading ? <LoadingList /> : items.length ? (
                     <div className="grid gap-3 md:grid-cols-2">
                         {items.map((friend) => (
-                            <Link key={friend.id} href={friend.url || `/users/${friend.id}`} className="flex items-center gap-3 border bg-background/45 p-3 hover:border-primary/40">
+                            <Link key={friend.id} href={getUserProfileHrefOrFallback(friend)} className="flex items-center gap-3 border bg-background/45 p-3 hover:border-primary/40">
                                 <Avatar className="size-10 rounded-none">
                                     <AvatarImage src={friend.avatar_url || friend.avatar || undefined} />
                                     <AvatarFallback className="rounded-none">{(friend.name || friend.title || "U").slice(0, 2).toUpperCase()}</AvatarFallback>
