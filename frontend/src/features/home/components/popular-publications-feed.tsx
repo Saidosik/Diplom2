@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { useSessionRefreshKey } from "@/lib/auth/use-session-refresh-key"
 import { cn } from "@/lib/utils"
 import { getPopularPublications } from "@/features/publications/api"
 import { formatPublicationDate, getPublicationTypeLabel } from "@/features/publications/lib/publication-labels"
@@ -64,11 +65,18 @@ export function PopularPublicationsFeed() {
     const [query, setQuery] = useState("")
     const [sort, setSort] = useState<SortMode>("popular")
     const [typeFilter, setTypeFilter] = useState<PublicationType | "all">("all")
+    const sessionRefreshKey = useSessionRefreshKey()
 
     const loadPublications = useCallback(
         async (page: number, mode: "replace" | "append") => {
             setStatus(mode === "replace" ? "loading" : "loading-more")
             setError(null)
+
+            if (mode === "replace") {
+                setPublications([])
+                setNextPage(null)
+                setHasMore(false)
+            }
 
             try {
                 const response = await getPopularPublications({
@@ -97,7 +105,7 @@ export function PopularPublicationsFeed() {
 
     useEffect(() => {
         void loadPublications(1, "replace")
-    }, [loadPublications])
+    }, [loadPublications, sessionRefreshKey])
 
     const typeOptions = useMemo(
         () => availableTypes.map((type) => [type, getPublicationTypeLabel(type)] as [PublicationType, string]),

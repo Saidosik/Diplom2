@@ -6,6 +6,19 @@ import createLaravelApi from "@/lib/http/laravel";
 import { isAxiosError } from "axios";
 import { NextRequest, NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+
+const SENSITIVE_GET_ENDPOINTS = new Set([
+    "recommendations",
+    "community/discovery",
+    "community/recommendations",
+])
+
+const SENSITIVE_HEADERS = {
+    "Cache-Control": "private, no-store",
+    "Vary": "Cookie, Authorization",
+}
+
 type RouteContext = {
     params: Promise<{ path: string[] }>
 }
@@ -73,7 +86,8 @@ function safeJson(text: string) {
 
 async function proxyLaravel(request: NextRequest, context: RouteContext) {
     const { path } = await context.params;
-    const endpoint = `${path.join("/")}${request.nextUrl.search}`
+    const pathname = path.join("/")
+    const endpoint = `${pathname}${request.nextUrl.search}`
 
     if (path.join("/") === "ai/chat/stream" || request.headers.get("accept")?.includes("text/event-stream")) {
         return proxyLaravelStream(request, endpoint)
@@ -95,12 +109,19 @@ async function proxyLaravel(request: NextRequest, context: RouteContext) {
             }
         })
 
-        return NextResponse.json(response.data, { status: response.status })
+        return NextResponse.json(response.data, {
+            status: response.status,
+            headers: isSensitiveGet(request, pathname) ? SENSITIVE_HEADERS : undefined,
+        })
     } catch (error) {
         if (isAxiosError(error)) {
             const headers = new Headers()
             const retryAfter = error.response?.headers?.["retry-after"]
             if (retryAfter) headers.set("Retry-After", String(retryAfter))
+            if (isSensitiveGet(request, pathname)) {
+                headers.set("Cache-Control", SENSITIVE_HEADERS["Cache-Control"])
+                headers.set("Vary", SENSITIVE_HEADERS.Vary)
+            }
 
             return NextResponse.json(
                 error.response?.data ?? { message: "Ошибка запроса к серверу" },
@@ -110,9 +131,13 @@ async function proxyLaravel(request: NextRequest, context: RouteContext) {
 
         return NextResponse.json(
             { message: "Ошибка проксирования запроса к серверу" },
-            { status: 500 }
+            { status: 500, headers: isSensitiveGet(request, pathname) ? SENSITIVE_HEADERS : undefined }
         )
     }
+}
+
+function isSensitiveGet(request: NextRequest, pathname: string) {
+    return request.method === "GET" && SENSITIVE_GET_ENDPOINTS.has(pathname)
 }
 
 export const GET = proxyLaravel

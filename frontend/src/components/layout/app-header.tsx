@@ -20,6 +20,7 @@ import { NotificationsBell } from "@/components/layout/notifications-bell"
 import { UserAvatar } from "@/features/users/components/user-avatar"
 import { getUserRoleLabel } from "@/features/users/lib/user-display"
 import { logout } from "@/features/auth/api"
+import { notifySessionChanged } from "@/lib/auth/session-events"
 import { safeRequest } from "@/lib/http/api-errors"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -140,6 +141,8 @@ function HeaderUserMenu({ user }: { user: User }) {
             }
 
             toast.success("Вы вышли из аккаунта")
+            notifySessionChanged()
+            router.refresh()
             router.push("/auth?mode=login")
             router.refresh()
         } catch (error) {

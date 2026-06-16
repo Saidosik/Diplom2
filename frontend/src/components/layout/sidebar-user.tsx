@@ -34,6 +34,7 @@ import {
     useSidebar,
 } from "@/components/ui/sidebar"
 import { logout } from "@/features/auth/api"
+import { notifySessionChanged } from "@/lib/auth/session-events"
 import { safeRequest } from "@/lib/http/api-errors"
 
 type SidebarUserProps = {
@@ -62,6 +63,8 @@ export function SidebarUser({ user }: SidebarUserProps) {
             }
 
             toast.success("Вы вышли из аккаунта")
+            notifySessionChanged()
+            router.refresh()
             router.push("/auth?mode=login")
             router.refresh()
         } catch (error) {

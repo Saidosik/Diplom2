@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { AuthCard } from "@/components/auth/AuthCard"
 import { Button } from "@/components/ui/button"
 import { getMe, logout, resendEmailVerification } from "@/features/auth/api"
+import { notifySessionChanged } from "@/lib/auth/session-events"
 import { safeRequest } from "@/lib/http/api-errors"
 
 const COOLDOWN_SECONDS = 60
@@ -72,6 +73,8 @@ function VerifyEmail() {
 
     const handleLogout = async () => {
         await safeRequest(logout())
+        notifySessionChanged()
+        router.refresh()
         router.push("/auth?mode=login")
         router.refresh()
     }
