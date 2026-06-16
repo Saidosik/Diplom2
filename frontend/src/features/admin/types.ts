@@ -295,3 +295,48 @@ export type AdminAiDashboard = {
 }
 
 export type AdminAiPrompts = Record<"chat" | "rag" | "files" | "code" | "project" | "question_auto_answer", string>
+export type RecommendationAnalyticsSummary = {
+    total_views: number
+    total_clicks: number
+    ctr: number
+    total_hides: number
+    hide_rate: number
+    total_likes: number
+    total_saves: number
+    positive_rate: number
+}
+
+export type RecommendationAnalyticsGroup = {
+    strategy?: string
+    mode?: string
+    type?: string
+    position?: number
+    views: number
+    clicks: number
+    ctr: number
+    hides: number
+    hide_rate: number
+    likes: number
+    saves: number
+}
+
+export type RecommendationAnalyticsItem = {
+    target_type: string
+    target_id: number
+    title?: string | null
+    href?: string | null
+    count: number
+    strategy?: string | null
+    mode?: string | null
+}
+
+export type RecommendationAnalytics = {
+    period: "day" | "week" | "month"
+    summary: RecommendationAnalyticsSummary
+    by_strategy: RecommendationAnalyticsGroup[]
+    by_mode: RecommendationAnalyticsGroup[]
+    by_type: RecommendationAnalyticsGroup[]
+    by_position: RecommendationAnalyticsGroup[]
+    top_clicked_items: RecommendationAnalyticsItem[]
+    top_hidden_items: RecommendationAnalyticsItem[]
+}

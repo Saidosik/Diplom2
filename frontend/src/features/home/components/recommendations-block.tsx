@@ -21,7 +21,8 @@ export function RecommendationsBlock() {
     })
 
     const mode = recommendationsQuery.data?.mode ?? "guest"
-    const isSemantic = recommendationsQuery.data?.meta?.strategy?.includes("semantic") ?? false
+    const strategy = recommendationsQuery.data?.meta?.strategy ?? "guest_trending"
+    const isSemantic = strategy.includes("semantic")
     const recommendations = useMemo(
         () => (recommendationsQuery.data?.data ?? []).filter((item) => !hiddenKeys.includes(recommendationKey(item))).slice(0, 4),
         [hiddenKeys, recommendationsQuery.data?.data]
@@ -42,11 +43,16 @@ export function RecommendationsBlock() {
                 context: "home",
                 metadata: {
                     source: "recommendations_block",
-                    position: index,
+                    position: index + 1,
+                    strategy,
+                    mode,
+                    recommendation_type: item.type,
+                    title: item.title,
+                    href: item.href,
                 },
             })
         })
-    }, [recommendations])
+    }, [mode, recommendations, strategy])
 
     const handleClick = (item: CommunityRecommendation, index: number) => {
         void safeTrack({
@@ -56,7 +62,12 @@ export function RecommendationsBlock() {
             context: "home",
             metadata: {
                 source: "recommendations_block",
-                position: index,
+                position: index + 1,
+                strategy,
+                mode,
+                recommendation_type: item.type,
+                title: item.title,
+                href: item.href,
             },
         })
     }
@@ -70,7 +81,12 @@ export function RecommendationsBlock() {
             context: "home",
             metadata: {
                 source: "recommendations_block",
-                position: index,
+                position: index + 1,
+                strategy,
+                mode,
+                recommendation_type: item.type,
+                title: item.title,
+                href: item.href,
             },
         })
     }

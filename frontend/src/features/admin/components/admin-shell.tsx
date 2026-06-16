@@ -35,6 +35,8 @@ const mainItems = [
     { title: "Контент", href: "/admin/content", icon: FileText },
     { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
+    { title: "AI индекс", href: "/admin/ai", icon: Database },
+    { title: "Рекомендации", href: "/admin/recommendations", icon: BarChart3 },
     { title: "Правовые документы", href: "/admin/legal/privacy-policy", icon: ScrollText, adminOnly: true },
     { title: "Внешний вид", href: "/admin/appearance", icon: Palette, adminOnly: true },
 ]

@@ -2,8 +2,10 @@ import { browserApi } from "@/lib/http/browser"
 import { normalizeSectionItems, normalizeUserProfileDashboard } from "./user-profile-normalizers"
 import type { UserProfileDashboard, UserProfileHubItem, UserProfileTab } from "./user-profile-types"
 
-export async function getUserProfileDashboard(user: number | string): Promise<UserProfileDashboard> {
-  const response = await browserApi.get<unknown>(`/laravel/users/${user}/profile/dashboard`)
+export async function getUserProfileDashboard(user: number | string, options?: { asGuest?: boolean }): Promise<UserProfileDashboard> {
+  const response = await browserApi.get<unknown>(`/laravel/users/${user}/profile/dashboard`, {
+    headers: options?.asGuest ? { "X-Vector-Public-Request": "1" } : undefined,
+  })
   return normalizeUserProfileDashboard(response.data)
 }
 

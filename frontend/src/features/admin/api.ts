@@ -1,5 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
-import type { AdminAiDocument, AdminAiIndexStatus, AdminChatMessage, AdminContentItem, AdminConversation, AdminDashboard, AdminReport, AdminUser, AdminLogsResponse, Paginated } from "./types"
+import type { AdminAiDocument, AdminAiIndexStatus, AdminChatMessage, AdminContentItem, AdminConversation, AdminDashboard, AdminReport, AdminUser, AdminLogsResponse, Paginated, RecommendationAnalytics } from "./types"
 
 export type AdminListParams = {
     q?: string
@@ -188,4 +188,8 @@ export async function getAdminAiPrompts() {
 export async function updateAdminAiPrompts(payload: Partial<import("./types").AdminAiPrompts>) {
     const response = await browserApi.patch<{ message: string; data: import("./types").AdminAiPrompts }>("/laravel/admin/ai/prompts", payload)
     return response.data.data
+}
+export async function getRecommendationAnalytics(period: "day" | "week" | "month" = "week") {
+    const response = await browserApi.get<RecommendationAnalytics>("/laravel/admin/recommendations/analytics", { params: { period } })
+    return response.data
 }

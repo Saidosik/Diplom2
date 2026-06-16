@@ -29,6 +29,27 @@ class ProfileHubTest extends TestCase
             ->assertJsonStructure(['user', 'stats', 'relation_state', 'pins', 'previews']);
     }
 
+
+    public function test_public_profile_can_be_loaded_by_username_without_private_settings(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'profile-handle',
+            'email' => 'hidden@example.com',
+            'show_email_publicly' => false,
+            'show_files_publicly' => false,
+            'show_activity_publicly' => false,
+        ]);
+
+        $this->getJson('/api/users/profile-handle/profile/dashboard')
+            ->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonMissingPath('user.email')
+            ->assertJsonMissingPath('user.show_files_publicly')
+            ->assertJsonMissingPath('user.show_activity_publicly')
+            ->assertJsonPath('files', [])
+            ->assertJsonPath('previews.files_preview', []);
+    }
+
     public function test_owner_sees_owner_specific_relation_state(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);
@@ -81,6 +102,36 @@ class ProfileHubTest extends TestCase
 
         $this->withToken(JWTAuth::fromUser($owner))->postJson('/api/me/profile/pins', ['pinnable_type' => 'publication', 'pinnable_id' => $publication->id])
             ->assertNotFound();
+    }
+
+
+    public function test_owner_can_unpin_deleted_material_without_breaking_profile(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $publication = $this->publication($user, 'deleted-pin');
+        PinnedItem::create([
+            'user_id' => $user->id,
+            'pinnable_type' => $publication->getMorphClass(),
+            'pinnable_id' => $publication->id,
+            'position' => 1,
+            'visibility' => 'public',
+        ]);
+        $publication->delete();
+
+        $this->getJson("/api/users/{$user->id}/profile/dashboard")
+            ->assertOk()
+            ->assertJsonPath('pins', []);
+
+        $this->withToken(JWTAuth::fromUser($user))->deleteJson('/api/me/profile/pins', [
+            'pinnable_type' => 'publication',
+            'pinnable_id' => $publication->id,
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('pinned_items', [
+            'user_id' => $user->id,
+            'pinnable_type' => $publication->getMorphClass(),
+            'pinnable_id' => $publication->id,
+        ]);
     }
 
     public function test_relation_state_contains_friend_request_and_subscription_state(): void

@@ -34,10 +34,10 @@ class ProfilePinService
             return PinnedItem::query()->updateOrCreate(
                 ['user_id' => $user->id, 'pinnable_type' => $target->getMorphClass(), 'pinnable_id' => $target->getKey()],
                 [
-                    'title_override' => $attributes['title_override'] ?? null,
-                    'description_override' => $attributes['description_override'] ?? null,
+                    'title_override' => array_key_exists('title_override', $attributes) ? $attributes['title_override'] : $existing?->title_override,
+                    'description_override' => array_key_exists('description_override', $attributes) ? $attributes['description_override'] : $existing?->description_override,
                     'position' => (int) ($attributes['position'] ?? ($existing?->position ?? 0)),
-                    'visibility' => $attributes['visibility'] ?? 'public',
+                    'visibility' => $attributes['visibility'] ?? ($existing?->visibility ?? 'public'),
                 ]
             );
         });
@@ -45,8 +45,23 @@ class ProfilePinService
 
     public function unpin(User $user, string $type, int $id): void
     {
-        $target = $this->resolveOwnPinnable($user, $type, $id);
-        PinnedItem::query()->where('user_id', $user->id)->where('pinnable_type', $target->getMorphClass())->where('pinnable_id', $target->getKey())->delete();
+        PinnedItem::query()
+            ->where('user_id', $user->id)
+            ->where('pinnable_type', $this->pinnableMorphClass($type))
+            ->where('pinnable_id', $id)
+            ->delete();
+    }
+
+    private function pinnableMorphClass(string $type): string
+    {
+        return match ($type) {
+            'publication' => (new Publication())->getMorphClass(),
+            'issue_question' => (new IssueQuestion())->getMorphClass(),
+            'issue_answer' => (new IssueAnswer())->getMorphClass(),
+            'code_snippet' => (new CodeSnippet())->getMorphClass(),
+            'user_file' => (new UserFile())->getMorphClass(),
+            default => throw ValidationException::withMessages(['pinnable_type' => 'Неподдерживаемый тип закрепа.']),
+        };
     }
 
     private function resolveOwnPinnable(User $user, string $type, int $id): Model

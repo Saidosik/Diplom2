@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\AdminChatModerationController;
 use App\Http\Controllers\Api\Admin\AdminContentController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
+use App\Http\Controllers\Api\Admin\RecommendationAnalyticsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminLogController;
 use App\Http\Controllers\Api\Admin\AdminLegalPageController;
@@ -287,6 +288,9 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
         Route::get('/ai/prompts', [AdminAiModelController::class, 'prompts'])->middleware('system_admin');
         Route::get('/ai/index/status', [AdminAiIndexController::class, 'status'])->middleware('system_admin');
         Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents'])->middleware('system_admin');
+        Route::get('/recommendations/analytics', RecommendationAnalyticsController::class);
+        Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
+        Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
 
         Route::middleware('system_admin')->group(function () {
             Route::get('/logs', [AdminLogController::class, 'index']);

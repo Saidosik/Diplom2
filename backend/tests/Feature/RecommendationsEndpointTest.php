@@ -345,6 +345,64 @@ class RecommendationsEndpointTest extends TestCase
         $this->assertStringContainsString('no-store', $authResponse->headers->get('Cache-Control'));
     }
 
+
+    public function test_admin_can_fetch_recommendation_analytics(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $this->analyticsEvent(RecommendationEvent::EVENT_VIEW, ['strategy' => 'personalized_semantic', 'mode' => 'personalized', 'recommendation_type' => 'publication', 'position' => 1]);
+
+        $this->withToken(JWTAuth::fromUser($admin))->getJson('/api/admin/recommendations/analytics?period=week')
+            ->assertOk()
+            ->assertJsonStructure(['period', 'summary', 'by_strategy', 'by_mode', 'by_type', 'by_position', 'top_clicked_items', 'top_hidden_items']);
+    }
+
+    public function test_non_admin_cannot_fetch_recommendation_analytics(): void
+    {
+        $user = User::factory()->create(['role' => 'user', 'email_verified_at' => now()]);
+
+        $this->withToken(JWTAuth::fromUser($user))->getJson('/api/admin/recommendations/analytics')
+            ->assertStatus(403);
+    }
+
+    public function test_recommendation_analytics_rates_and_grouping_are_correct(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $metadata = ['strategy' => 'personalized_semantic', 'mode' => 'personalized', 'recommendation_type' => 'publication', 'position' => 1];
+        $this->analyticsEvent(RecommendationEvent::EVENT_VIEW, $metadata);
+        $this->analyticsEvent(RecommendationEvent::EVENT_VIEW, $metadata);
+        $this->analyticsEvent(RecommendationEvent::EVENT_CLICK, $metadata);
+        $this->analyticsEvent(RecommendationEvent::EVENT_HIDE, $metadata);
+        $this->analyticsEvent(RecommendationEvent::EVENT_LIKE, $metadata);
+        $this->analyticsEvent(RecommendationEvent::EVENT_SAVE, $metadata + ['position' => 2]);
+
+        $this->withToken(JWTAuth::fromUser($admin))->getJson('/api/admin/recommendations/analytics?period=week')
+            ->assertOk()
+            ->assertJsonPath('summary.total_views', 2)
+            ->assertJsonPath('summary.total_clicks', 1)
+            ->assertJsonPath('summary.ctr', 0.5)
+            ->assertJsonPath('summary.total_hides', 1)
+            ->assertJsonPath('summary.hide_rate', 0.5)
+            ->assertJsonPath('summary.total_likes', 1)
+            ->assertJsonPath('summary.total_saves', 1)
+            ->assertJsonPath('by_strategy.0.strategy', 'personalized_semantic')
+            ->assertJsonPath('by_strategy.0.clicks', 1)
+            ->assertJsonPath('by_position.0.position', 1)
+            ->assertJsonPath('by_position.0.views', 2);
+    }
+
+    public function test_empty_recommendation_analytics_returns_zero_safe_response(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+
+        $this->withToken(JWTAuth::fromUser($admin))->getJson('/api/admin/recommendations/analytics?period=day')
+            ->assertOk()
+            ->assertJsonPath('summary.total_views', 0)
+            ->assertJsonPath('summary.ctr', 0)
+            ->assertJsonPath('summary.hide_rate', 0)
+            ->assertJsonPath('by_strategy', [])
+            ->assertJsonPath('top_clicked_items', []);
+    }
+
     public function test_event_post_always_returns_no_store(): void
     {
         $response = $this->postJson('/api/recommendations/events', [
@@ -355,6 +413,20 @@ class RecommendationsEndpointTest extends TestCase
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
     }
 
+
+
+    private function analyticsEvent(string $type, array $metadata): RecommendationEvent
+    {
+        return RecommendationEvent::create([
+            'guest_id' => 'analytics-guest',
+            'event_type' => $type,
+            'target_type' => RecommendationEvent::TARGET_PUBLICATION,
+            'target_id' => 777,
+            'context' => 'home',
+            'metadata' => $metadata + ['title' => 'Analytics item', 'href' => '/publications/analytics-item'],
+            'weight' => RecommendationEvent::weightFor($type),
+        ]);
+    }
 
     private function indexedChunk(string $sourceType, int $sourceId, string $title, array $embedding): AiKnowledgeChunk
     {
