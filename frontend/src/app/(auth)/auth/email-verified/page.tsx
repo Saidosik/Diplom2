@@ -6,14 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { CheckCircle2, LoaderCircle, XCircle } from "lucide-react"
 
+import { AuthCard } from "@/components/auth/AuthCard"
 import { Button } from "@/components/ui/button"
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
 import { getMe } from "@/features/auth/api"
 import { safeRequest } from "@/lib/http/api-errors"
 
@@ -42,52 +36,67 @@ function EmailVerifiedContent() {
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="w-full"
         >
-            <Card className="rounded-3xl border-white/10 bg-[#07110c] text-slate-100 shadow-2xl shadow-black/45">
-                <CardHeader className="text-center">
-                    <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl border bg-background">
-                        {isLoading ? (
-                            <LoaderCircle className="size-6 animate-spin text-slate-400" />
-                        ) : verified ? (
-                            <CheckCircle2 className="size-6 text-emerald-500" />
-                        ) : (
-                            <XCircle className="size-6 text-destructive" />
-                        )}
-                    </div>
-                    <CardTitle>{verified ? "Email успешно подтверждён" : "Email не подтверждён"}</CardTitle>
-                    <CardDescription>
-                        {verified
-                            ? "Теперь вы можете пользоваться всеми разделами платформы."
-                            : "Ссылка подтверждения устарела или повреждена. Запросите новое письмо."}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <Button asChild className="w-full">
-                        <Link href={verified && isAuthenticated ? "/profile" : "/auth?mode=login"}>
-                            {verified && isAuthenticated ? "Перейти в приложение" : "Войти"}
-                        </Link>
-                    </Button>
-                    {!verified && (
-                        <Button asChild variant="outline" className="w-full">
-                            <Link href="/verify-email">Запросить письмо повторно</Link>
+            <AuthCard
+                eyebrow="Статус аккаунта"
+                title={verified ? "Email подтверждён" : "Email не подтверждён"}
+                icon={
+                    isLoading ? (
+                        <LoaderCircle className="size-5 animate-spin" />
+                    ) : verified ? (
+                        <CheckCircle2 className="size-5 text-emerald-400" />
+                    ) : (
+                        <XCircle className="size-5 text-destructive" />
+                    )
+                }
+                description={
+                    verified
+                        ? "Теперь вам доступны все разделы Вектора: публикации, вопросы, чаты, AI и playground."
+                        : "Ссылка подтверждения устарела или повреждена. Запросите новое письмо и попробуйте ещё раз."
+                }
+                footer={
+                    <>
+                        <Button asChild className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground">
+                            <Link href={verified && isAuthenticated ? "/profile" : "/auth?mode=login"}>
+                                {verified && isAuthenticated ? "Перейти в приложение" : "Войти"}
+                            </Link>
                         </Button>
-                    )}
-                </CardContent>
-            </Card>
+
+                        {!verified && (
+                            <Button asChild variant="outline" className="h-11 w-full !rounded-2xl border-white/10 bg-white/[0.045]">
+                                <Link href="/verify-email">Запросить письмо повторно</Link>
+                            </Button>
+                        )}
+                    </>
+                }
+            >
+                <div className="border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-slate-400">
+                    {isLoading
+                        ? "Обновляем данные пользователя и проверяем статус подтверждения."
+                        : verified
+                            ? "Можно возвращаться в профиль и продолжать работу с проектом."
+                            : "Если вы уверены, что уже подтвердили email, попробуйте войти повторно."}
+                </div>
+            </AuthCard>
         </motion.div>
     )
 }
 
 export default function EmailVerifiedPage() {
     return (
-        <Suspense fallback={
-            <Card className="w-full">
-                <CardHeader className="text-center">
-                    <LoaderCircle className="mx-auto size-5 animate-spin text-slate-400" />
-                    <CardTitle>Загрузка</CardTitle>
-                    <CardDescription>Обновляем статус аккаунта.</CardDescription>
-                </CardHeader>
-            </Card>
-        }>
+        <Suspense
+            fallback={
+                <AuthCard
+                    eyebrow="Загрузка"
+                    title="Обновляем статус"
+                    icon={<LoaderCircle className="size-5 animate-spin" />}
+                    description="Проверяем подтверждение аккаунта."
+                >
+                    <div className="h-2 overflow-hidden bg-white/10">
+                        <div className="h-full w-1/2 animate-pulse bg-primary" />
+                    </div>
+                </AuthCard>
+            }
+        >
             <EmailVerifiedContent />
         </Suspense>
     )
