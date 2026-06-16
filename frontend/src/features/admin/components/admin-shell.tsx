@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, Palette, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
+import { BarChart3, Database, FileText, Flag, Home, LayoutDashboard, MessageSquare, ScrollText, ShieldCheck, Tags, Users } from "lucide-react"
 import type { User } from "@/features/auth/types"
 import { SiteBrand } from "@/components/layout/site-brand"
 import { AppAmbient } from "@/components/layout/app-ambient"
@@ -36,6 +36,7 @@ const mainItems = [
     { title: "Теги", href: "/admin/tags", icon: Tags },
     { title: "Чаты", href: "/admin/chats", icon: MessageSquare },
     { title: "AI индекс", href: "/admin/ai", icon: Database },
+    { title: "Рекомендации", href: "/admin/recommendations", icon: BarChart3 },
     { title: "Правовые документы", href: "/admin/legal/privacy-policy", icon: ScrollText, adminOnly: true },
     { title: "Внешний вид", href: "/admin/appearance", icon: Palette, adminOnly: true },
 ]

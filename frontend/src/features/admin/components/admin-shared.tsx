@@ -38,7 +38,7 @@ export function AdminNav() {
         ["Контент", "/admin/content"],
         ["Чаты", "/admin/chats"],
         ["AI индекс", "/admin/ai"],
-        ["Внешний вид", "/admin/appearance"],
+        ["Рекомендации", "/admin/recommendations"],
     ] as const
 
     return (

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminChatModerationController;
 use App\Http\Controllers\Api\Admin\AdminContentController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
+use App\Http\Controllers\Api\Admin\RecommendationAnalyticsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminLogController;
 use App\Http\Controllers\Api\Admin\AdminLegalPageController;
@@ -278,9 +279,7 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::prefix('admin')->middleware(['admin', 'throttle:admin-actions'])->group(function () {
         Route::get('/dashboard', AdminDashboardController::class);
-        Route::get('/appearance', [AdminAppearanceController::class, 'show'])->middleware('system_admin');
-        Route::match(['put', 'patch'], '/appearance', [AdminAppearanceController::class, 'update'])->middleware('system_admin');
-        Route::post('/appearance/reset', [AdminAppearanceController::class, 'reset'])->middleware('system_admin');
+        Route::get('/recommendations/analytics', RecommendationAnalyticsController::class);
         Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
         Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
 

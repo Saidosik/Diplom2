@@ -1,5 +1,5 @@
 import { browserApi } from "@/lib/http/browser"
-import type { AdminAiDocument, AdminAiIndexStatus, AdminChatMessage, AdminContentItem, AdminConversation, AdminDashboard, AdminReport, AdminUser, AdminLogsResponse, Paginated } from "./types"
+import type { AdminAiDocument, AdminAiIndexStatus, AdminChatMessage, AdminContentItem, AdminConversation, AdminDashboard, AdminReport, AdminUser, AdminLogsResponse, Paginated, RecommendationAnalytics } from "./types"
 
 export type AdminListParams = {
     q?: string
@@ -157,5 +157,10 @@ export async function updateAdminTag(id: number, payload: AdminTagPayload) {
 
 export async function deleteAdminTag(id: number) {
     const response = await browserApi.delete<{ message: string }>(`/laravel/admin/tags/${id}`)
+    return response.data
+}
+
+export async function getRecommendationAnalytics(period: "day" | "week" | "month" = "week") {
+    const response = await browserApi.get<RecommendationAnalytics>("/laravel/admin/recommendations/analytics", { params: { period } })
     return response.data
 }
