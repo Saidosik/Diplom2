@@ -83,6 +83,36 @@ class ProfileHubTest extends TestCase
             ->assertNotFound();
     }
 
+
+    public function test_owner_can_unpin_deleted_material_without_breaking_profile(): void
+    {
+        $user = User::factory()->create(['email_verified_at' => now()]);
+        $publication = $this->publication($user, 'deleted-pin');
+        PinnedItem::create([
+            'user_id' => $user->id,
+            'pinnable_type' => $publication->getMorphClass(),
+            'pinnable_id' => $publication->id,
+            'position' => 1,
+            'visibility' => 'public',
+        ]);
+        $publication->delete();
+
+        $this->getJson("/api/users/{$user->id}/profile/dashboard")
+            ->assertOk()
+            ->assertJsonPath('pins', []);
+
+        $this->withToken(JWTAuth::fromUser($user))->deleteJson('/api/me/profile/pins', [
+            'pinnable_type' => 'publication',
+            'pinnable_id' => $publication->id,
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('pinned_items', [
+            'user_id' => $user->id,
+            'pinnable_type' => $publication->getMorphClass(),
+            'pinnable_id' => $publication->id,
+        ]);
+    }
+
     public function test_relation_state_contains_friend_request_and_subscription_state(): void
     {
         $viewer = User::factory()->create(['email_verified_at' => now()]);

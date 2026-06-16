@@ -21,6 +21,7 @@ import {
   Share2,
   Shield,
   UserPlus,
+  UserX,
   X,
 } from "lucide-react"
 
@@ -33,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAvatar } from "@/features/users/components/user-avatar"
 import { ReportDialog } from "@/features/interactions/components/report-dialog"
-import { acceptFriendRequest, cancelFriendRequest, sendFriendRequest } from "@/features/social/api"
+import { acceptFriendRequest, cancelFriendRequest, declineFriendRequest, sendFriendRequest } from "@/features/social/api"
 import { subscribeToTarget, unsubscribeFromTarget } from "@/features/community/api"
 import { cn } from "@/lib/utils"
 import { formatPublicationDate } from "@/features/publications/lib/publication-labels"
@@ -43,6 +44,7 @@ import type { UserProfileDashboard, UserProfileHubItem, UserProfileTab } from ".
 type UserProfilePageProps = {
   user: string
   currentUserId?: number | null
+  previewAsGuest?: boolean
 }
 
 const tabs: Array<{ value: UserProfileTab; label: string }> = [
@@ -56,10 +58,10 @@ const tabs: Array<{ value: UserProfileTab; label: string }> = [
   { value: "reputation", label: "Репутация" },
 ]
 
-export function UserProfilePage({ user, currentUserId }: UserProfilePageProps) {
+export function UserProfilePage({ user, currentUserId, previewAsGuest = false }: UserProfilePageProps) {
   const query = useQuery({
-    queryKey: ["user-profile-dashboard", user],
-    queryFn: () => getUserProfileDashboard(user),
+    queryKey: ["user-profile-dashboard", user, previewAsGuest ? "guest" : "viewer"],
+    queryFn: () => getUserProfileDashboard(user, { asGuest: previewAsGuest }),
   })
 
   if (query.isLoading) return <UserProfileSkeleton />
@@ -80,18 +82,26 @@ export function UserProfilePage({ user, currentUserId }: UserProfilePageProps) {
   }
 
   const dashboard = query.data
-  const isOwner = dashboard.relation_state.is_owner || Number(currentUserId) === Number(dashboard.user.id)
+  const isOwner = !previewAsGuest && (dashboard.relation_state.is_owner || Number(currentUserId) === Number(dashboard.user.id))
+  const isAuthenticated = Boolean(currentUserId) && !previewAsGuest
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5">
-      <UserProfileHero dashboard={dashboard} isOwner={isOwner} userParam={user} />
+      {previewAsGuest ? (
+        <Alert className="rounded-none border-primary/30 bg-primary/5">
+          <AlertCircle className="size-4" />
+          <AlertTitle>Просмотр как гость</AlertTitle>
+          <AlertDescription>Показываем публичную версию профиля без ваших owner-действий.</AlertDescription>
+        </Alert>
+      ) : null}
+      <UserProfileHero dashboard={dashboard} isOwner={isOwner} userParam={user} isAuthenticated={isAuthenticated} />
       <UserProfilePinnedSection dashboard={dashboard} userParam={user} isOwner={isOwner} />
       <UserProfileTabs dashboard={dashboard} userParam={user} isOwner={isOwner} />
     </div>
   )
 }
 
-function UserProfileHero({ dashboard, isOwner, userParam }: { dashboard: UserProfileDashboard; isOwner: boolean; userParam: string }) {
+function UserProfileHero({ dashboard, isOwner, userParam, isAuthenticated }: { dashboard: UserProfileDashboard; isOwner: boolean; userParam: string; isAuthenticated: boolean }) {
   const { user, stats, relation_state: relation } = dashboard
   const role = user.role && user.role !== "user" ? user.role : "участник"
 
@@ -124,7 +134,7 @@ function UserProfileHero({ dashboard, isOwner, userParam }: { dashboard: UserPro
               </div>
             </div>
           </div>
-          <UserProfileActions dashboard={dashboard} isOwner={isOwner} userParam={userParam} />
+          <UserProfileActions dashboard={dashboard} isOwner={isOwner} userParam={userParam} isAuthenticated={isAuthenticated} />
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <Stat label="репутация" value={stats.reputation} />
@@ -139,12 +149,16 @@ function UserProfileHero({ dashboard, isOwner, userParam }: { dashboard: UserPro
   )
 }
 
-function UserProfileActions({ dashboard, isOwner, userParam }: { dashboard: UserProfileDashboard; isOwner: boolean; userParam: string }) {
+function UserProfileActions({ dashboard, isOwner, userParam, isAuthenticated }: { dashboard: UserProfileDashboard; isOwner: boolean; userParam: string; isAuthenticated: boolean }) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const user = dashboard.user
   const relation = dashboard.relation_state
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["user-profile-dashboard", userParam] })
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["user-profile-dashboard", userParam] })
+    queryClient.invalidateQueries({ queryKey: ["user-profile-dashboard", userParam, "viewer"] })
+    queryClient.invalidateQueries({ queryKey: ["user-profile-dashboard", userParam, "guest"] })
+  }
 
   const messageMutation = useMutation({
     mutationFn: () => openProfileMessage(user.id),
@@ -152,7 +166,8 @@ function UserProfileActions({ dashboard, isOwner, userParam }: { dashboard: User
     onError: () => toast.error("Не удалось открыть чат"),
   })
   const friendMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (action?: "decline") => {
+      if (action === "decline" && relation.incoming_friend_request_id) return declineFriendRequest(relation.incoming_friend_request_id)
       if (relation.incoming_friend_request_id) return acceptFriendRequest(relation.incoming_friend_request_id)
       if (relation.outgoing_friend_request_id) return cancelFriendRequest(relation.outgoing_friend_request_id)
       return sendFriendRequest({ recipient_id: user.id })
@@ -177,7 +192,7 @@ function UserProfileActions({ dashboard, isOwner, userParam }: { dashboard: User
       <div className="flex flex-wrap gap-2 lg:justify-end">
         <Button asChild className="rounded-none"><Link href="/settings"><Settings className="size-4" />Редактировать профиль</Link></Button>
         <Button asChild variant="outline" className="rounded-none"><Link href="/profile">Управлять закрепами</Link></Button>
-        <Button asChild variant="secondary" className="rounded-none"><Link href={`/user/${user.id}`}>Посмотреть как гость</Link></Button>
+        <Button asChild variant="secondary" className="rounded-none"><Link href={`/user/${user.id}?preview=guest`}>Посмотреть как гость</Link></Button>
       </div>
     )
   }
@@ -188,17 +203,28 @@ function UserProfileActions({ dashboard, isOwner, userParam }: { dashboard: User
   return (
     <div className="flex flex-wrap gap-2 lg:justify-end">
       {relation.can_message ? <Button className="rounded-none" onClick={() => messageMutation.mutate()} disabled={messageMutation.isPending}>{messageMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}Написать</Button> : null}
-      <Button variant="outline" className="rounded-none" onClick={() => friendMutation.mutate()} disabled={friendMutation.isPending || relation.is_friend}>{friendMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{friendLabel}</Button>
-      <Button variant={subscribed ? "secondary" : "outline"} className="rounded-none" onClick={() => subscribeMutation.mutate()} disabled={subscribeMutation.isPending}>{subscribed ? <BellOff className="size-4" /> : <Bell className="size-4" />}{subscribed ? "Отписаться" : "Подписаться"}</Button>
+      {isAuthenticated ? (
+        <>
+          <Button variant="outline" className="rounded-none" onClick={() => friendMutation.mutate(undefined)} disabled={friendMutation.isPending || relation.is_friend}>{friendMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{friendLabel}</Button>
+          <Button variant={subscribed ? "secondary" : "outline"} className="rounded-none" onClick={() => subscribeMutation.mutate()} disabled={subscribeMutation.isPending}>{subscribed ? <BellOff className="size-4" /> : <Bell className="size-4" />}{subscribed ? "Отписаться" : "Подписаться"}</Button>
+        </>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-none"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="rounded-none">
           <DropdownMenuItem onClick={() => copyProfileLink(user.id)}><Share2 className="size-4" />Поделиться</DropdownMenuItem>
           <DropdownMenuItem onClick={() => copyProfileLink(user.id)}><Copy className="size-4" />Скопировать ссылку</DropdownMenuItem>
-          {relation.can_report ? <DropdownMenuSeparator /> : null}
-          {relation.can_report ? <ReportDialog targetType="user" targetId={user.id} label="Пожаловаться" isAuthenticated variant="button" /> : null}
+          {relation.incoming_friend_request_id && isAuthenticated ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => friendMutation.mutate("decline")} disabled={friendMutation.isPending}>
+                <UserX className="size-4" />Отклонить заявку
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {relation.can_report ? <ReportDialog targetType="user" targetId={user.id} label="Пожаловаться" isAuthenticated={isAuthenticated} /> : null}
     </div>
   )
 }
@@ -258,7 +284,7 @@ function UserProfileOverview({ dashboard }: { dashboard: UserProfileDashboard; i
 }
 
 function UserProfileSection({ userParam, tab, fallback }: { userParam: string; tab: UserProfileTab; fallback: UserProfileHubItem[] }) {
-  const query = useQuery({ queryKey: ["user-profile-section", userParam, tab], queryFn: () => getUserProfileSection(userParam, tab), enabled: tab !== "overview" })
+  const query = useQuery({ queryKey: ["user-profile-section", userParam, tab], queryFn: () => getUserProfileSection(userParam, tab), enabled: tab !== "overview", retry: false })
   const items = query.data ?? fallback
   if (query.isLoading && fallback.length === 0) return <SectionSkeleton />
   if (query.isError) return <Alert className="rounded-none"><AlertCircle className="size-4" /><AlertTitle>Раздел недоступен</AlertTitle><AlertDescription>Данные скрыты настройками приватности или временно не загрузились.</AlertDescription></Alert>
@@ -270,7 +296,7 @@ function UserProfileMaterialCard({ item, compact = false, action }: { item: User
   const href = normalizeHref(item.url, item.type, item.id)
   return (
     <Card className="group rounded-none border bg-card/80 transition-colors hover:border-primary/45">
-      <CardContent className={cn("space-y-3 p-4", compact && "p-3")}> 
+      <CardContent className={cn("space-y-3 p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2"><Badge variant="secondary" className="rounded-none">{typeLabel(item.type)}</Badge>{action}</div>
         <div className="space-y-1"><h3 className="line-clamp-2 font-medium tracking-tight"><Link href={href} className="hover:text-primary">{item.title || "Без названия"}</Link></h3>{item.description || item.excerpt ? <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{item.description || item.excerpt}</p> : null}</div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">{item.created_at ? <span>{formatDate(item.created_at)}</span> : null}{item.language ? <span>{item.language}</span> : null}{item.kind ? <span>{item.kind}</span> : null}</div>

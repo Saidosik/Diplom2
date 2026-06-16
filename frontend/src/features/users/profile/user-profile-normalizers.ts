@@ -57,7 +57,11 @@ export function normalizeUserProfileDashboard(payload: unknown): UserProfileDash
 
 export function normalizeSectionItems(payload: unknown): UserProfileHubItem[] {
   if (payload && typeof payload === "object" && "data" in payload) {
-    return arrayOfItems((payload as { data: unknown }).data)
+    const data = (payload as { data: unknown }).data
+    if (data && typeof data === "object" && "events" in data) {
+      return arrayOfItems((data as { events?: unknown }).events)
+    }
+    return arrayOfItems(data)
   }
   return arrayOfItems(payload)
 }
