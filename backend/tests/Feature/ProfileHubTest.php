@@ -29,6 +29,27 @@ class ProfileHubTest extends TestCase
             ->assertJsonStructure(['user', 'stats', 'relation_state', 'pins', 'previews']);
     }
 
+
+    public function test_public_profile_can_be_loaded_by_username_without_private_settings(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'profile-handle',
+            'email' => 'hidden@example.com',
+            'show_email_publicly' => false,
+            'show_files_publicly' => false,
+            'show_activity_publicly' => false,
+        ]);
+
+        $this->getJson('/api/users/profile-handle/profile/dashboard')
+            ->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonMissingPath('user.email')
+            ->assertJsonMissingPath('user.show_files_publicly')
+            ->assertJsonMissingPath('user.show_activity_publicly')
+            ->assertJsonPath('files', [])
+            ->assertJsonPath('previews.files_preview', []);
+    }
+
     public function test_owner_sees_owner_specific_relation_state(): void
     {
         $user = User::factory()->create(['email_verified_at' => now()]);

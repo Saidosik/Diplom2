@@ -313,10 +313,15 @@ class ProfileHubController extends Controller
             'created_at',
             'updated_at',
             'reputation_score',
-            'show_friends_publicly',
-            'show_files_publicly',
-            'show_activity_publicly',
         ]);
+
+        if ($owner) {
+            $data = $data->merge($user->only([
+                'show_friends_publicly',
+                'show_files_publicly',
+                'show_activity_publicly',
+            ]));
+        }
 
         $data->put('avatar_url', $this->avatarUrl($user));
         $data->put('reputation_level', $user->reputationLevel());

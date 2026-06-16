@@ -123,6 +123,20 @@ class User extends Authenticatable implements JWTSubject, MustVerifyEmailContrac
         return 'id';
     }
 
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $query = $this->newQuery();
+
+        if ($field) {
+            return $query->where($field, $value)->first();
+        }
+
+        return $query
+            ->where('id', $value)
+            ->orWhere('username', $value)
+            ->first();
+    }
+
     public function profilePins(): HasMany
     {
         return $this->pinnedItems();

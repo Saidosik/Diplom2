@@ -191,6 +191,7 @@ function UserProfileActions({ dashboard, isOwner, userParam, isAuthenticated }: 
     return (
       <div className="flex flex-wrap gap-2 lg:justify-end">
         <Button asChild className="rounded-none"><Link href="/settings"><Settings className="size-4" />Редактировать профиль</Link></Button>
+        <Button asChild variant="outline" className="rounded-none"><Link href="/settings">Настроить видимость</Link></Button>
         <Button asChild variant="outline" className="rounded-none"><Link href="/profile">Управлять закрепами</Link></Button>
         <Button asChild variant="secondary" className="rounded-none"><Link href={`/user/${user.id}?preview=guest`}>Посмотреть как гость</Link></Button>
       </div>
@@ -246,7 +247,31 @@ function UserProfilePinnedSection({ dashboard, userParam, isOwner }: { dashboard
       <CardContent>
         {pins.length === 0 ? <UserProfileEmptyState title="Пока нет закреплённых материалов" description={isOwner ? "Закрепи важные публикации, вопросы, сниппеты или файлы в своём профиле." : "Участник ещё не выбрал материалы для витрины."} /> : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {pins.map((item) => <UserProfileMaterialCard key={`${item.type}-${item.id}`} item={item} compact action={isOwner ? <Button variant="ghost" size="icon-sm" onClick={() => unpinMutation.mutate(item)} disabled={unpinMutation.isPending}><X className="size-4" /></Button> : null} />)}
+            {pins.map((item) => (
+              <UserProfileMaterialCard
+                key={`${item.type}-${item.id}`}
+                item={item}
+                compact
+                action={isOwner ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon-sm" className="rounded-none" disabled={unpinMutation.isPending}>
+                        {unpinMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-none">
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile">Управлять закрепами</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => unpinMutation.mutate(item)}>
+                        <X className="size-4" />Открепить
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              />
+            ))}
           </div>
         )}
       </CardContent>
@@ -294,11 +319,18 @@ function UserProfileSection({ userParam, tab, fallback }: { userParam: string; t
 
 function UserProfileMaterialCard({ item, compact = false, action }: { item: UserProfileHubItem; compact?: boolean; action?: React.ReactNode }) {
   const href = normalizeHref(item.url, item.type, item.id)
+  const metrics = metricChips(item)
   return (
     <Card className="group rounded-none border bg-card/80 transition-colors hover:border-primary/45">
       <CardContent className={cn("space-y-3 p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2"><Badge variant="secondary" className="rounded-none">{typeLabel(item.type)}</Badge>{action}</div>
-        <div className="space-y-1"><h3 className="line-clamp-2 font-medium tracking-tight"><Link href={href} className="hover:text-primary">{item.title || "Без названия"}</Link></h3>{item.description || item.excerpt ? <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{item.description || item.excerpt}</p> : null}</div>
+        <div className="space-y-1">
+          <h3 className="line-clamp-2 font-medium tracking-tight">
+            {href ? <Link href={href} className="hover:text-primary">{item.title || "Без названия"}</Link> : <span>{item.title || "Без названия"}</span>}
+          </h3>
+          {item.description || item.excerpt ? <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{item.description || item.excerpt}</p> : null}
+        </div>
+        {metrics.length > 0 ? <div className="flex flex-wrap gap-1.5">{metrics.map((metric) => <Badge key={metric} variant="outline" className="rounded-none text-[11px]">{metric}</Badge>)}</div> : null}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">{item.created_at ? <span>{formatDate(item.created_at)}</span> : null}{item.language ? <span>{item.language}</span> : null}{item.kind ? <span>{item.kind}</span> : null}</div>
       </CardContent>
     </Card>
@@ -322,5 +354,15 @@ function SectionSkeleton() { return <div className="grid gap-3 md:grid-cols-2 xl
 function fallbackForTab(d: UserProfileDashboard, tab: UserProfileTab) { if (tab === "publications") return d.previews.latest_publications; if (tab === "questions") return d.previews.latest_questions; if (tab === "answers") return d.previews.latest_answers; if (tab === "snippets") return d.snippets ?? d.previews.snippets_preview; if (tab === "files") return d.files ?? d.previews.files_preview; if (tab === "activity") return d.activity ?? d.previews.activity_preview; if (tab === "reputation") return d.reputation?.events ?? []; return [] }
 function formatDate(value?: string | null) { return value ? formatPublicationDate(value) : "дата неизвестна" }
 function typeLabel(type: string) { return ({ publication: "Публикация", issue_question: "Вопрос", issue_answer: "Ответ", code_snippet: "Сниппет", user_file: "Файл", achievement: "Достижение" } as Record<string, string>)[type] ?? type }
-function normalizeHref(url: string | null | undefined, type: string, id: number) { if (url) return url.startsWith("/questions/") ? url.replace("/questions/", "/questions/") : url; if (type === "user_file") return `/files/${id}`; if (type === "code_snippet") return `/playground?snippet=${id}`; return "#" }
+function normalizeHref(url: string | null | undefined, type: string, id: number) { if (url) return url; if (type === "user_file") return `/files/${id}`; if (type === "code_snippet") return `/playground?snippet=${id}`; return null }
+function metricChips(item: UserProfileHubItem) {
+  const meta = item.meta ?? {}
+  return [
+    typeof meta.likes === "number" ? `${meta.likes} лайков` : null,
+    typeof meta.comments === "number" ? `${meta.comments} комментариев` : null,
+    typeof meta.answers === "number" ? `${meta.answers} ответов` : null,
+    typeof meta.saved === "number" ? `${meta.saved} сохранений` : null,
+    typeof item.size === "number" ? `${Math.max(1, Math.round(item.size / 1024))} КБ` : null,
+  ].filter(Boolean) as string[]
+}
 function copyProfileLink(userId: number) { const href = `${window.location.origin}/user/${userId}`; void navigator.clipboard?.writeText(href); toast.success("Ссылка на профиль скопирована") }
