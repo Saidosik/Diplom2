@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminAiIndexController;
+use App\Http\Controllers\Api\Admin\AdminAppearanceController;
+use App\Http\Controllers\Api\AppearanceController;
 use App\Http\Controllers\Api\Admin\AdminChatModerationController;
 use App\Http\Controllers\Api\Admin\AdminContentController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
@@ -28,6 +30,7 @@ use App\Http\Controllers\Api\Issue\IssueQuestionController;
 use App\Http\Controllers\Api\Publication\PublicationController;
 use App\Http\Controllers\Api\Playground\CodePlaygroundController;
 use App\Http\Controllers\Api\Recommendation\RecommendationController;
+use App\Http\Controllers\Api\Recommendation\RecommendationEventController;
 use App\Http\Controllers\Api\Chat\ChatController;
 use App\Http\Controllers\Api\Social\FriendController;
 use App\Http\Controllers\Api\Social\PresenceController;
@@ -77,6 +80,7 @@ Route::get('/comments', [CommentController::class, 'index']);
 Route::get('/tags', [TagController::class, 'index']);
 Route::get('/tags/{tag:slug}', [TagController::class, 'show']);
 Route::get('/recommendations', RecommendationController::class);
+Route::post('/recommendations/events', RecommendationEventController::class);
 Route::get('/community/overview', CommunityOverviewController::class);
 Route::get('/community/discovery', [CommunityDiscoveryController::class, 'discovery']);
 Route::get('/community/popular-publications', [CommunityDiscoveryController::class, 'popularPublications']);
@@ -93,6 +97,7 @@ Route::post('/ai/rag/search', [RagController::class, 'search'])->middleware('thr
 Route::get('/playground/languages', [CodePlaygroundController::class, 'languages']);
 Route::get('/playground/public-snippets/{codeSnippet}', [CodePlaygroundController::class, 'publicSnippet']);
 Route::get('/legal/privacy-policy', [LegalPageController::class, 'privacyPolicy']);
+Route::get('/appearance', AppearanceController::class)->middleware('throttle:60,1');
 
 Route::prefix('oauth')->group(function () {
     Route::get('/{provider}/redirect-url', [SocialAuthController::class, 'redirectUrl']);
@@ -273,6 +278,9 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::prefix('admin')->middleware(['admin', 'throttle:admin-actions'])->group(function () {
         Route::get('/dashboard', AdminDashboardController::class);
+        Route::get('/appearance', [AdminAppearanceController::class, 'show'])->middleware('system_admin');
+        Route::match(['put', 'patch'], '/appearance', [AdminAppearanceController::class, 'update'])->middleware('system_admin');
+        Route::post('/appearance/reset', [AdminAppearanceController::class, 'reset'])->middleware('system_admin');
         Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
         Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
 
