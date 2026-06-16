@@ -98,6 +98,30 @@ export type CommunityRecommendation = {
     item?: Publication | IssueQuestion | CommunityTag
 }
 
+export type RecommendationMode = "guest" | "personalized"
+
+
+export type RecommendationEventPayload = {
+    event_type: "view" | "click" | "long_view" | "save" | "like" | "dislike" | "comment" | "search" | "hide" | "open_tag" | "open_author"
+    target_type?: "publication" | "question" | "tag" | "user" | null
+    target_id?: number | null
+    context?: string | null
+    metadata?: Record<string, unknown> | null
+}
+
+export type RecommendationsResponse = {
+    mode: RecommendationMode
+    data: CommunityRecommendation[]
+    meta?: {
+        period?: "day" | "week" | "month" | "all"
+        personalized?: boolean
+        matched_tags?: Array<{ id: number; name: string; slug: string; color?: string | null }>
+        followed_authors_count?: number
+        signals_count?: number
+        strategy?: "guest_events" | "personalized_events" | "guest_trending" | "personalized"
+    }
+}
+
 export type CommunityTrend = {
     type: "publication" | "question" | "tag"
     title: string
@@ -126,6 +150,7 @@ export type CommunityDiscovery = CommunityOverview & {
         matched_tags?: Array<{ id: number; name: string; slug: string; color?: string | null }>
         followed_authors_count?: number
         signals_count?: number
+        strategy?: "guest_events" | "personalized_events" | "guest_trending" | "personalized"
     }
 }
 

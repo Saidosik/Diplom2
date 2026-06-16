@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Admin\AdminChatModerationController;
 use App\Http\Controllers\Api\Admin\AdminContentController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
+use App\Http\Controllers\Api\Admin\RecommendationAnalyticsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminLogController;
 use App\Http\Controllers\Api\Admin\AdminLegalPageController;
@@ -27,6 +28,8 @@ use App\Http\Controllers\Api\Issue\IssueAnswerController;
 use App\Http\Controllers\Api\Issue\IssueQuestionController;
 use App\Http\Controllers\Api\Publication\PublicationController;
 use App\Http\Controllers\Api\Playground\CodePlaygroundController;
+use App\Http\Controllers\Api\Recommendation\RecommendationController;
+use App\Http\Controllers\Api\Recommendation\RecommendationEventController;
 use App\Http\Controllers\Api\Chat\ChatController;
 use App\Http\Controllers\Api\Social\FriendController;
 use App\Http\Controllers\Api\Social\PresenceController;
@@ -75,6 +78,8 @@ Route::get('/issues/{issueQuestion}', [IssueQuestionController::class, 'show']);
 Route::get('/comments', [CommentController::class, 'index']);
 Route::get('/tags', [TagController::class, 'index']);
 Route::get('/tags/{tag:slug}', [TagController::class, 'show']);
+Route::get('/recommendations', RecommendationController::class);
+Route::post('/recommendations/events', RecommendationEventController::class);
 Route::get('/community/overview', CommunityOverviewController::class);
 Route::get('/community/discovery', [CommunityDiscoveryController::class, 'discovery']);
 Route::get('/community/popular-publications', [CommunityDiscoveryController::class, 'popularPublications']);
@@ -271,6 +276,7 @@ Route::middleware(['jwt', 'email_verified'])->group(function () {
 
     Route::prefix('admin')->middleware(['admin', 'throttle:admin-actions'])->group(function () {
         Route::get('/dashboard', AdminDashboardController::class);
+        Route::get('/recommendations/analytics', RecommendationAnalyticsController::class);
         Route::get('/ai/index/status', [AdminAiIndexController::class, 'status']);
         Route::get('/ai/index/documents', [AdminAiIndexController::class, 'documents']);
 
