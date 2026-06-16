@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "@tanstack/react-form"
-import { LoaderCircle, LogIn } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuthCard } from "@/components/auth/AuthCard"
@@ -13,7 +13,6 @@ import { PasswordField } from "@/components/auth/PasswordField"
 import { Button } from "@/components/ui/button"
 import {
     Field,
-    FieldDescription,
     FieldError,
     FieldGroup,
     FieldLabel,
@@ -95,7 +94,6 @@ export function LoginForm() {
             <AuthCard
                 eyebrow="Авторизация"
                 title="С возвращением"
-                icon={<LogIn className="size-5" />}
                 description="Войдите, чтобы продолжить работу с публикациями, чатами, AI-помощником и playground."
                 footer={
                     <>
@@ -103,7 +101,7 @@ export function LoginForm() {
                             type="submit"
                             disabled={isSubmitting}
                             form="LoginForm"
-                            className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                            className="h-10 w-full !rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
                         >
                             {isSubmitting ? "Выполняется вход" : "Войти в аккаунт"}
                             {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
@@ -121,13 +119,13 @@ export function LoginForm() {
             >
                 <form
                     id="LoginForm"
-                    className="space-y-5"
+                    className="space-y-4"
                     onSubmit={async (event) => {
                         event.preventDefault()
                         await form.handleSubmit()
                     }}
                 >
-                    <FieldGroup className="gap-4">
+                    <FieldGroup className="gap-3">
                         <form.Field name="email">
                             {(field) => {
                                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
@@ -184,13 +182,10 @@ export function LoginForm() {
                         </form.Field>
                     </FieldGroup>
 
-                    <FieldDescription className="text-center text-xs text-slate-500">
-                        Вход защищён httpOnly cookie и текущей JWT-логикой проекта.
-                    </FieldDescription>
                 </form>
             </AuthCard>
 
-            <p className="mt-5 text-center text-sm text-slate-400">
+            <p className="mt-4 text-center text-sm text-slate-400">
                 Нет аккаунта?{" "}
                 <Link href="?mode=register" className="font-medium text-primary underline-offset-4 hover:underline">
                     Зарегистрироваться

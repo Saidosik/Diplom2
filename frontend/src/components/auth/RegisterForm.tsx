@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useForm } from "@tanstack/react-form"
-import { LoaderCircle, Sparkles } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuthCard } from "@/components/auth/AuthCard"
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
     Field,
-    FieldDescription,
     FieldError,
     FieldGroup,
     FieldLabel,
@@ -84,15 +83,13 @@ export function RegisterForm() {
             <AuthCard
                 eyebrow="Регистрация"
                 title="Создайте аккаунт"
-                icon={<Sparkles className="size-5" />}
-                description="Присоединяйтесь к Вектору: публикуйте материалы, задавайте вопросы, запускайте код и используйте AI-помощника."
                 footer={
                     <>
                         <Button
                             type="submit"
                             disabled={isSubmitting}
                             form="RegisterForm"
-                            className="h-11 w-full !rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
+                            className="h-10 w-full !rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-0.5 hover:bg-primary/90"
                         >
                             {isSubmitting ? "Создаём аккаунт" : "Зарегистрироваться"}
                             {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
@@ -110,13 +107,13 @@ export function RegisterForm() {
             >
                 <form
                     id="RegisterForm"
-                    className="space-y-5"
+                    className="space-y-4"
                     onSubmit={async (event) => {
                         event.preventDefault()
                         await form.handleSubmit()
                     }}
                 >
-                    <FieldGroup className="gap-4">
+                    <FieldGroup className="gap-3">
                         <form.Field name="name">
                             {(field) => {
                                 const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
@@ -170,7 +167,7 @@ export function RegisterForm() {
                             }}
                         </form.Field>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-2">
                             <form.Field name="password">
                                 {(field) => {
                                     const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
@@ -232,7 +229,7 @@ export function RegisterForm() {
                                     <Field data-invalid={isInvalid}>
                                         <label
                                             htmlFor={field.name}
-                                            className="flex cursor-pointer items-start gap-3 border border-white/10 bg-white/[0.035] p-3 text-sm leading-6 text-slate-400 transition hover:border-primary/35 hover:bg-primary/5"
+                                            className="flex cursor-pointer items-center gap-3 border border-white/10 bg-white/[0.035] px-3 py-2.5 text-sm leading-5 text-slate-400 transition hover:border-primary/35 hover:bg-primary/5"
                                         >
                                             <Checkbox
                                                 id={field.name}
@@ -241,14 +238,13 @@ export function RegisterForm() {
                                                 onBlur={field.handleBlur}
                                                 onCheckedChange={(checked) => field.handleChange(checked === true)}
                                                 aria-invalid={isInvalid}
-                                                className="mt-1"
+
                                             />
                                             <span>
                                                 Я принимаю{" "}
-                                                <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
+                                                <Link href="/privacy-policy" className="font-medium text-primary underline-offset-4 hover:underline">
                                                     политику конфиденциальности
-                                                </Link>{" "}
-                                                и понимаю, что после регистрации нужно подтвердить email.
+                                                </Link>.
                                             </span>
                                         </label>
                                         {isInvalid && <FieldError errors={field.state.meta.errors} />}
@@ -257,14 +253,10 @@ export function RegisterForm() {
                             }}
                         </form.Field>
                     </FieldGroup>
-
-                    <FieldDescription className="text-center text-xs text-slate-500">
-                        Пароль должен содержать минимум 8 символов.
-                    </FieldDescription>
                 </form>
             </AuthCard>
 
-            <p className="mt-5 text-center text-sm text-slate-400">
+            <p className="mt-4 text-center text-sm text-slate-400">
                 Уже есть аккаунт?{" "}
                 <Link href="?mode=login" className="font-medium text-primary underline-offset-4 hover:underline">
                     Войти

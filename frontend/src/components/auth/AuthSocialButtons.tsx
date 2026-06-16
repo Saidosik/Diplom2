@@ -45,16 +45,16 @@ export default function AuthSocialButtons({
     }
 
     return (
-        <div className={cn("flex w-full flex-col gap-4", className)}>
+        <div className={cn("flex w-full flex-col gap-3", className)}>
             <div className="relative flex items-center">
                 <div className="h-px grow bg-white/10" />
-                <span className="mx-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                <span className="mx-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
                     {label}
                 </span>
                 <div className="h-px grow bg-white/10" />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2.5">
                 {providers.map((name) => {
                     const provider = providerData[name]
                     const Icon = provider.component
@@ -64,7 +64,7 @@ export default function AuthSocialButtons({
                             key={name}
                             type="button"
                             variant="outline"
-                            className="group h-11 w-full !rounded-2xl border-white/10 bg-white/[0.045] text-slate-100 shadow-sm shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/55 hover:bg-primary/10 hover:text-white"
+                            className="group h-10 w-full !rounded-xl border-white/10 bg-white/[0.045] text-slate-100 shadow-sm shadow-black/10 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/55 hover:bg-primary/10 hover:text-white"
                             onClick={() => handleClick(name)}
                             title={`${label} ${provider.label}`}
                         >
