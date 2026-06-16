@@ -79,7 +79,7 @@ async function proxyLaravel(request: NextRequest, context: RouteContext) {
         return proxyLaravelStream(request, endpoint)
     }
 
-    const token = await getAccessTokenCookie()
+    const token = request.headers.get("x-vector-public-request") === "1" ? null : await getAccessTokenCookie()
     const Laravel = createLaravelApi(token)
     const contentType = request.headers.get("content-type") ?? undefined;
 
